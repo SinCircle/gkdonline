@@ -4,6 +4,7 @@ import { copySelectedWorkFile, discardSelectedWorkFile, uploadWorkAttachment, Se
 import { WorkAttachmentView } from './WorkAttachmentView';
 import { submitWork, loadWorkDraft, saveWorkDraft, previousSubmission, WorkSubmitResult } from '../api/WorkSubmitApi';
 import { CourseWork } from '../data/WorkModels';
+import { WorkNavigation } from '../data/WorkNavigation';
 import { WorkDetail, WorkQuestion, QuestionKind, QuestionOption, QuestionAttachment, AnswerBinding, AnswerChoice, WorkAnswer, WorkSubmissionForm } from '../data/WorkDetailModels';
 import { CourseResource } from '../data/ResourceModels';
 import { fetchWorkDetail, fetchWorkDetailPage, WorkDetailPage } from '../api/WorkDetailApi';
@@ -213,6 +214,8 @@ export struct QuestionCard {
 @ComponentV2
 export struct WorkDetailView {
   @Require @Param work: CourseWork;
+  @Param courseId: string = '';
+  @Param classId: string = '';
   @Event onRequestLogin: () => void = () => {};
   @Local private loading: boolean = true;
   @Local private detail: WorkDetail | undefined = undefined;
@@ -249,6 +252,7 @@ export struct WorkDetailView {
     SessionManager.get().subscribe(this.listener); this.sync();
   }
   aboutToDisappear(): void {
+    WorkNavigation.get().publishChanged({ workId: this.work.id, courseId: this.courseId, classId: this.classId });
     this.active = false; this.version++; SessionManager.get().unsubscribe(this.listener);
     if (this.pendingUpload && !this.uploading) discardSelectedWorkFile(this.pendingUpload);
     if (!this.uploading) this.pendingUpload = undefined;
@@ -284,27 +288,18 @@ export struct WorkDetailView {
   }
   private statusText(): string {
     if (!this.detail?.form) return this.work.status.includes('待批阅') ? '等待老师批阅' : '作业已提交';
+    if (!this.locked && !this.submissionOutcome) return this.detail.state;
     if (this.submissionOutcome === 'success') return '已提交 · 服务端仍可作答';
     if (this.submissionOutcome === 'pending') return '提交处理中';
     if (this.submissionOutcome === 'uncertain') return '提交结果待核实';
     return '已提交';
   }
-  private detailStateText(): string {
-    if (this.detail?.form && this.submissionOutcome === 'success') return '服务端仍可作答 · 修改后需重新提交';
-    if (this.detail?.form && this.submissionOutcome === 'uncertain') return '提交结果待核实 · 暂不能修改';
-    if (this.detail?.form && this.submissionOutcome === 'pending') return '提交处理中 · 服务端仍可作答';
-    return this.detail?.state ?? '';
-  }
   private submittedView(): boolean {
-    return this.locked || (!this.detail?.form && /已完成|待批阅|已提交/.test(this.work.status));
+    return this.locked || (!!this.detail && !this.detail.form);
   }
   private canRevise(): boolean {
     return this.submissionOutcome !== 'uncertain' && !this.detail?.form?.blockedReason &&
       !this.revisionLoading && (!!this.detail?.form || !!this.modifyUrl);
-  }
-  private objectiveCount(): number {
-    return this.detail?.questions.filter((q: WorkQuestion) =>
-      [QuestionKind.SINGLE, QuestionKind.MULTIPLE, QuestionKind.JUDGMENT].includes(q.kind)).length ?? 0;
   }
   private async revise(): Promise<void> {
     if (!this.canRevise()) return;
@@ -511,17 +506,17 @@ export struct WorkDetailView {
           ListItem() {
             Column({ space: $r('app.float.ui_space_content') }) {
               Text(this.detail.title).fontSize($r('app.float.ui_text_page_title')).fontWeight(FontWeight.Medium)
-              Text(`共 ${this.detail.questions.length} 题 · ${this.detailStateText()}`).fontSize($r('app.float.ui_text_label')).fontColor($r('app.color.ui_text_secondary'))
+              Text(`共 ${this.detail.questions.length} 题`).fontSize($r('app.float.ui_text_label')).fontColor($r('app.color.ui_text_secondary'))
               if (this.detail.description) { Text(this.detail.description).fontSize($r('app.float.ui_text_body')) }
             }.width('100%').alignItems(HorizontalAlign.Start)
           }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page'), top: $r('app.float.ui_space_page_top') })
-          if (this.submittedView()) {
+          if (this.detail.form || this.submittedView()) {
             ListItem() {
               Column({ space: $r('app.float.ui_space_content') }) {
                 Text(this.statusText()).fontSize($r('app.float.ui_text_page_title'))
                   .fontWeight(FontWeight.Medium).fontColor($r('app.color.ui_accent'))
                   .textAlign(TextAlign.Center).width('100%').id('work-submission-status')
-                if (this.feedback || this.work.status) {
+                if (this.submittedView() && (this.feedback || this.work.status)) {
                   Text(this.feedback || this.work.status).fontSize($r('app.float.ui_text_body'))
                     .fontColor($r('app.color.ui_text_secondary')).textAlign(TextAlign.Center).width('100%')
                 }
@@ -563,9 +558,6 @@ export struct WorkDetailView {
             if (this.submitLogin) {
               Button('重新登录').width('100%').onClick(() => { this.onRequestLogin(); })
             } else if (this.submittedView()) {
-              Text(`共 ${this.detail.questions.length} 题，${this.objectiveCount()} 道客观题、${this.detail.questions.length - this.objectiveCount()} 道主观题`)
-                .fontSize($r('app.float.ui_text_label')).fontColor($r('app.color.ui_text_secondary'))
-                .textAlign(TextAlign.Center).width('100%').id('work-question-counts')
               Button(this.revisionLoading ? '正在打开修改页…' : '修改答案').width('100%').height($r('app.float.ui_size_primary_button'))
                 .backgroundColor($r('app.color.ui_accent')).fontColor(Color.White)
                 .enabled(this.canRevise())
@@ -581,7 +573,6 @@ export struct WorkDetailView {
                 .backgroundColor($r('app.color.ui_accent')).fontColor(Color.White)
                 .enabled(!this.submitting && !this.confirming && !this.uploading && !this.picking && !this.audioCapture && !this.pendingUpload && !this.detail.form?.blockedReason)
                 .onClick(() => { this.confirmSubmit(); })
-              Text('草稿仅保存在本机；确认后才会提交').fontSize($r('app.float.ui_text_label')).fontColor($r('app.color.ui_text_secondary'))
             }
           }.width('100%').padding($r('app.float.ui_space_page')).backgroundColor($r('app.color.ui_surface'))
         }

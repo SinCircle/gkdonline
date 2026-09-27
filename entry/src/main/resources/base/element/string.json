@@ -187,13 +187,33 @@
       "value": "未读"
     },
     {
+      "name": "notice_detail",
+      "value": "通知详情"
+    },
+    {
+      "name": "notice_open_work",
+      "value": "查看作业"
+    },
+    {
+      "name": "notice_opening_work",
+      "value": "正在打开作业…"
+    },
+    {
       "name": "mine_not_logged_in",
       "value": "未登录"
     },
     {
       "name": "mine_guest_description",
-      "value": "登录后查看凭证与连接状态"
+      "value": "登录后可同步课程、作业与通知"
     },
+    { "name": "mine_account_group", "value": "账号" },
+    { "name": "mine_logged_in", "value": "已登录" },
+    { "name": "service_domain", "value": "mooc.mooc.ucas.edu.cn" },
+    { "name": "settings_title", "value": "设置" },
+    { "name": "settings_notifications", "value": "通知" },
+    { "name": "settings_work_reminder", "value": "作业截止提醒" },
+    { "name": "settings_diagnostics", "value": "诊断" },
+    { "name": "settings_save_error", "value": "保存失败，请重试" },
     {
       "name": "mine_about_title",
       "value": "关于"
@@ -228,11 +248,11 @@
     },
     {
       "name": "server_check_passed",
-      "value": "通过：受保护接口返回 JSON"
+      "value": "已验证"
     },
     {
       "name": "server_check_failed",
-      "value": "未通过：未取得可识别的接口响应"
+      "value": "未通过"
     },
     {
       "name": "login_origin_label",

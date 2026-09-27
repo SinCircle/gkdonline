@@ -6,6 +6,8 @@ import { filterCourses } from '../api/CourseParser';
 import { SessionManager, SessionState } from '../auth/SessionManager';
 import { fetchCourseWork } from '../api/WorkApi';
 import { CourseWork } from '../data/WorkModels';
+import { WorkChanged, WorkNavigation } from '../data/WorkNavigation';
+import { CourseNote, CourseNotesNavigation, LocalUiStore, NotesResult } from '../data/LocalUiStore';
 
 const DOMAIN: number = 0x0a01;
 const TAG: string = 'CoursesView';
@@ -42,6 +44,13 @@ export struct CoursesView {
   @Local private failure: ApiErrorKind | undefined = undefined;
   @Local private unfinishedCounts: Record<string, number> = {};
   @Local private keyword: string = '';
+  @Local private notesByCourse: Record<string, CourseNote[]> = {};
+  @Local private noteVersions: Record<string, number> = {};
+  @Local private coursePins: Record<string, boolean> = {};
+  @Local private localError: string = '';
+  private localStore: LocalUiStore = LocalUiStore.get();
+  private notesListener: (courseId: string, notes: CourseNote[]) => void = () => {};
+  private notesSubscribed: boolean = false;
   private filterIds: string[] = [];
   private countQueue: Course[] = [];
   private countStarted: Set<string> = new Set<string>();
@@ -52,12 +61,32 @@ export struct CoursesView {
   private requestVersion: number = 0;
   private sessionKey: string = '';
   private listener: () => void = () => {};
+  private workListener: (change: WorkChanged) => void = () => {};
+  private countGeneration: Record<string, number> = {};
 
   aboutToAppear(): void {
     this.active = true;
+    if (!this.notesSubscribed) {
+      this.notesListener = (courseId: string, notes: CourseNote[]) => {
+        const next: Record<string, CourseNote[]> = {};
+        for (const key of Object.keys(this.notesByCourse)) next[key] = this.notesByCourse[key];
+        next[courseId] = notes;
+        this.notesByCourse = next;
+        const versions: Record<string, number> = {};
+        for (const key of Object.keys(this.noteVersions)) versions[key] = this.noteVersions[key];
+        versions[courseId] = (versions[courseId] ?? 0) + 1;
+        this.noteVersions = versions;
+        this.visibleCourses = this.visibleCourses.slice();
+        hilog.info(DOMAIN, TAG, '本机备注同步到课程卡片 %{public}s，条数 %{public}d', courseId, notes.length);
+      };
+      this.localStore.subscribeNotes(this.notesListener);
+      this.notesSubscribed = true;
+    }
     this.sessionKey = '';
     this.listener = () => { if (this.active) this.syncSession(); };
     SessionManager.get().subscribe(this.listener);
+    this.workListener = (change: WorkChanged) => { this.refreshChangedCount(change); };
+    WorkNavigation.get().subscribeChanged(this.workListener);
     this.syncSession();
   }
 
@@ -65,6 +94,16 @@ export struct CoursesView {
     this.active = false;
     this.requestVersion++;
     SessionManager.get().unsubscribe(this.listener);
+    WorkNavigation.get().unsubscribeChanged(this.workListener);
+  }
+
+  private refreshChangedCount(change: WorkChanged): void {
+    if (!this.active || !change.courseId) return;
+    const course: Course | undefined = this.courses.find((item: Course) =>
+      item.courseId === change.courseId && (!change.classId || item.classId === change.classId));
+    if (!course) return;
+    this.countGeneration[course.id] = (this.countGeneration[course.id] ?? 0) + 1;
+    this.loadUnfinishedCount(course, this.requestVersion, false);
   }
 
   private syncSession(): void {
@@ -117,7 +156,8 @@ export struct CoursesView {
     const keyword: string = this.keyword.trim().toLowerCase();
     const matched: Course[] = keyword.length === 0 ? byTerm : byTerm.filter((course: Course) =>
       course.name.toLowerCase().includes(keyword) || course.teacher.toLowerCase().includes(keyword));
-    this.visibleCourses = matched;
+    this.visibleCourses = matched.filter((course: Course) => !!this.coursePins[course.id])
+      .concat(matched.filter((course: Course) => !this.coursePins[course.id]));
     this.queueUnfinishedCounts(matched, this.requestVersion);
   }
 
@@ -143,12 +183,13 @@ export struct CoursesView {
     }
   }
 
-  private async loadUnfinishedCount(course: Course, version: number): Promise<void> {
+  private async loadUnfinishedCount(course: Course, version: number, fromQueue: boolean = true): Promise<void> {
+    const generation: number = this.countGeneration[course.id] ?? 0;
     try {
       const context = this.getUIContext().getHostContext();
       if (!context) return;
       const works: CourseWork[] = await fetchCourseWork(course, context.cacheDir);
-      if (this.active && version === this.requestVersion) {
+      if (this.active && version === this.requestVersion && generation === (this.countGeneration[course.id] ?? 0)) {
         const next: Record<string, number> = {};
         for (const key of Object.keys(this.unfinishedCounts)) next[key] = this.unfinishedCounts[key];
         next[course.id] = works.filter((work: CourseWork) => work.status.trim() === '未交').length;
@@ -157,7 +198,7 @@ export struct CoursesView {
     } catch (error) {
       hilog.warn(DOMAIN, TAG, '作业数读取失败，课程 %{public}s：%{public}s', course.id, (error as Error).message);
     } finally {
-      if (version === this.requestVersion) {
+      if (fromQueue && version === this.requestVersion) {
         this.countRunning--;
         if (this.countQueue.length === 0 && this.countRunning === 0) {
           hilog.info(DOMAIN, TAG, '作业数补齐：已请求 %{public}d 门课程，耗时 %{public}d ms',
@@ -189,6 +230,7 @@ export struct CoursesView {
     this.countRunning = 0;
     this.countBatchStartedAt = 0;
     this.countBatchTotal = 0;
+    this.countGeneration = {};
     if (!SessionManager.get().loggedIn) {
       this.courses = [];
       this.visibleCourses = [];
@@ -201,6 +243,7 @@ export struct CoursesView {
       if (!this.active || version !== this.requestVersion) return;
       const previous: string | undefined = this.filterIds[this.selectedIndex];
       this.courses = catalog.courses;
+      this.loadLocalState(catalog.courses);
       const terms: CourseSemester[] = catalog.semesters.filter((term: CourseSemester) =>
         term.id === catalog.currentSemesterId || catalog.courses.some((course: Course) =>
           course.sectionId === term.id));
@@ -227,6 +270,65 @@ export struct CoursesView {
     } finally {
       if (this.active && version === this.requestVersion) this.loading = false;
     }
+  }
+
+  private loadLocalState(courses: Course[]): void {
+    this.localError = '';
+    try {
+      this.localStore.init(this.getUIContext().getHostContext());
+      this.coursePins = this.localStore.readCoursePins();
+      const notes: Record<string, CourseNote[]> = {};
+      for (const course of courses) {
+        const result: NotesResult = this.localStore.readNotes(course.id);
+        notes[course.id] = result.notes;
+        if (result.error) this.localError = `${course.name}：${result.error}`;
+      }
+      this.notesByCourse = notes;
+    } catch (error) {
+      this.localError = (error as Error).message;
+    }
+  }
+
+  private pinCourse(id: string): void {
+    try {
+      const next: Record<string, boolean> = {};
+      for (const key of Object.keys(this.coursePins)) next[key] = this.coursePins[key];
+      next[id] = !this.coursePins[id];
+      this.localStore.saveCoursePins(next);
+      this.coursePins = next;
+      this.localError = '';
+      this.applyFilter();
+    } catch (error) { this.localError = (error as Error).message; }
+  }
+
+  private setNoteDone(course: Course, id: string, done: boolean): void {
+    const notes: CourseNote[] = this.notesByCourse[course.id] ?? [];
+    const next: CourseNote[] = notes.map((note: CourseNote) => note.id === id ?
+      { id: note.id, text: note.text, done: done, createdAt: note.createdAt } : note);
+    try {
+      this.localStore.saveNotes(course.id, next);
+      const all: Record<string, CourseNote[]> = {};
+      for (const key of Object.keys(this.notesByCourse)) all[key] = this.notesByCourse[key];
+      all[course.id] = next;
+      this.notesByCourse = all;
+      this.localError = '';
+    } catch (error) { this.localError = (error as Error).message; }
+  }
+
+  @Builder
+  private courseSwipeMenu(course: Course) {
+    Row({ space: 4 }) {
+      Button() {
+        SymbolGlyph(this.coursePins[course.id] ? $r('sys.symbol.pin_slash') : $r('sys.symbol.pin_fill'))
+          .fontSize(32)
+          .fontColor([$r('app.color.ui_accent')])
+      }
+        .width(48).height(48).padding(0)
+        .backgroundColor($r('app.color.ui_surface'))
+        .borderRadius($r('app.float.ui_radius_button'))
+        .accessibilityText(this.coursePins[course.id] ? '取消置顶这门课程' : '置顶这门课程')
+        .onClick(() => { this.pinCourse(course.id); })
+    }.padding({ left: $r('app.float.ui_space_page'), right: 4 })
   }
 
   build() {
@@ -263,6 +365,12 @@ export struct CoursesView {
           .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
       } else {
         Column({ space: $r('app.float.ui_space_list') }) {
+          if (this.localError) {
+            Text(this.localError)
+              .fontSize($r('app.float.ui_text_label'))
+              .fontColor($r('app.color.ui_error'))
+              .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
+          }
           Column({ space: $r('app.float.ui_space_content') }) {
             if (USING_SAMPLE_DATA) {
               Text($r('app.string.sample_data_notice'))
@@ -315,32 +423,52 @@ export struct CoursesView {
             ListItem() {
               Row() {
                 Column({ space: $r('app.float.ui_space_content') }) {
-                  Text(course.name)
-                    .fontSize($r('app.float.ui_text_card_title'))
-                    .fontColor($r('app.color.ui_text_primary'))
-                    .fontWeight(FontWeight.Medium)
+                  Row({ space: $r('app.float.ui_space_content') }) {
+                    Text(course.name)
+                      .fontSize($r('app.float.ui_text_card_title'))
+                      .fontColor($r('app.color.ui_text_primary'))
+                      .fontWeight(FontWeight.Medium)
+                      .layoutWeight(1)
+                      .draggable(false)
+                    if (this.coursePins[course.id]) {
+                      SymbolGlyph($r('sys.symbol.pin_fill'))
+                        .fontSize(16)
+                        .fontColor([$r('app.color.ui_text_tertiary')])
+                        .id('course-pin-' + course.id)
+                        .accessibilityText('已置顶')
+                    }
+                  }.width('100%')
                   if (course.teacher.length > 0) {
                     Row() {
-                    Text($r('app.string.course_teacher'))
-                      .fontSize($r('app.float.ui_text_body'))
-                      .fontColor($r('app.color.ui_text_secondary'))
                     Text(course.teacher)
                       .fontSize($r('app.float.ui_text_body'))
                       .fontColor($r('app.color.ui_text_secondary'))
+                      .draggable(false)
                     }
                   }
-                  if (course.semester.length > 0) {
-                    Text(course.semester)
-                      .fontSize($r('app.float.ui_text_label'))
-                      .fontColor($r('app.color.ui_text_tertiary'))
-                  }
+                  ForEach(this.notesByCourse[course.id] ?? [], (note: CourseNote) => {
+                    Row({ space: $r('app.float.ui_space_content') }) {
+                      Checkbox({ name: note.id })
+                        .select(note.done)
+                        .width(16).height(16)
+                        .hitTestBehavior(HitTestMode.Block)
+                        .onChange((checked: boolean) => { this.setNoteDone(course, note.id, checked); })
+                      Text(note.text)
+                        .fontSize($r('app.float.ui_text_body'))
+                        .fontColor(note.done ? $r('app.color.ui_text_secondary') :
+                          $r('app.color.ui_text_primary'))
+                        .decoration({ type: note.done ? TextDecorationType.LineThrough : TextDecorationType.None })
+                        .layoutWeight(1)
+                        .draggable(false)
+                    }.width('100%').id(`course-note-${note.id}`)
+                  }, (note: CourseNote) => note.id)
                 }.alignItems(HorizontalAlign.Start).layoutWeight(1)
                 if ((this.unfinishedCounts[course.id] ?? 0) > 0) {
                   Text(this.unfinishedCounts[course.id].toString())
                     .fontSize($r('app.float.ui_text_label'))
                     .fontWeight(FontWeight.Medium)
                     .fontColor($r('app.color.ui_surface'))
-                    .backgroundColor($r('app.color.ui_error'))
+                    .backgroundColor($r('app.color.ui_badge_number'))
                     .width($r('app.float.ui_size_badge'))
                     .height($r('app.float.ui_size_badge'))
                     .borderRadius($r('app.float.ui_size_badge'))
@@ -352,11 +480,16 @@ export struct CoursesView {
               .padding($r('app.float.ui_space_card'))
               .backgroundColor($r('app.color.ui_surface'))
               .borderRadius($r('app.float.ui_radius_card'))
+              .id('course-card-' + course.id)
               .onClick(() => { this.onOpenCourse(course); })
+              .gesture(LongPressGesture({ fingers: 1, repeat: false, duration: 500 })
+                .onAction(() => { CourseNotesNavigation.open(course); }))
             }.margin({ bottom: index === this.visibleCourses.length - 1 ?
               $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
               .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          }, (course: Course) => course.id)
+              .swipeAction({ end: { builder: () => { this.courseSwipeMenu(course); } },
+                edgeEffect: SwipeEdgeEffect.Spring })
+          }, (course: Course) => `${course.id}:${this.noteVersions[course.id] ?? 0}`)
           }.width('100%').layoutWeight(1)
         }.width('100%').layoutWeight(1)
       }

@@ -8,6 +8,7 @@
     { "name": "ui_accent", "value": "#0B59E8" },
     { "name": "ui_accent_soft", "value": "#EAF1FF" },
     { "name": "ui_error", "value": "#B42318" },
+    { "name": "ui_badge_number", "value": "#E02025" },
     { "name": "ui_type_pdf", "value": "#C5362B" },
     { "name": "ui_type_pdf_soft", "value": "#FDECEA" },
     { "name": "ui_type_ppt", "value": "#AC5629" },

@@ -112,10 +112,13 @@ def capture(tag: str, wait_for: str, timeout: float, interval: float) -> tuple:
 
 
 def screenshot(tag: str) -> str:
-    remote = f"/data/local/tmp/{tag}.jpeg"
+    # 远程文件名必须每次唯一：用 tag 命名时，复用同一个 tag 会把设备上的旧文件再拉一遍，
+    # 截出来的图和上一轮一模一样（实测踩过）。取回后删掉远程临时文件。
+    remote = f"/data/local/tmp/probe-{os.getpid()}-{int(time.time() * 1000)}.jpeg"
     local = os.path.join(ROOT, "verification", tag, "screen.jpeg")
     run(["shell", "snapshot_display", "-f", remote])
     run(["file", "recv", remote, local.replace("/", os.sep)])
+    run(["shell", "rm", "-f", remote])
     return local if os.path.exists(local) else ""
 
 

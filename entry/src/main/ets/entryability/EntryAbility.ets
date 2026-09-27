@@ -1,12 +1,31 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { WorkNavigation } from '../data/WorkNavigation';
 
 const DOMAIN = 0x0000;
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+    this.acceptWorkWant(want);
+  }
+
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    this.acceptWorkWant(want);
+  }
+
+  private acceptWorkWant(want: Want): void {
+    const params: Record<string, Object> | undefined = want.parameters;
+    const workId: Object | undefined = params?.['gkdWorkId'];
+    const title: Object | undefined = params?.['gkdWorkTitle'];
+    const detailUrl: Object | undefined = params?.['gkdWorkUrl'];
+    if (typeof workId !== 'string' || typeof title !== 'string' || typeof detailUrl !== 'string' ||
+      workId.length === 0 || detailUrl.length === 0) return;
+    const courseId: Object | undefined = params?.['gkdCourseId'];
+    const classId: Object | undefined = params?.['gkdClassId'];
+    WorkNavigation.get().offerLink({ workId: workId, title: title, detailUrl: detailUrl,
+      courseId: typeof courseId === 'string' ? courseId : '', classId: typeof classId === 'string' ? classId : '' });
   }
 
   onDestroy(): void {

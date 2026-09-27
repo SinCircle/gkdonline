@@ -1,6 +1,9 @@
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { notificationManager } from '@kit.NotificationKit';
+import { preferences } from '@kit.ArkData';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import wantAgent from '@ohos.wantAgent';
 import { Course } from '../data/Models';
 import { CourseWork } from '../data/WorkModels';
 import { SessionManager } from '../auth/SessionManager';
@@ -8,7 +11,7 @@ import { SessionManager } from '../auth/SessionManager';
 const AHEAD_MINUTES: number = 48 * 60;
 const inFlight: Set<string> = new Set<string>();
 
-export interface DueWork { key: string; title: string; remainingMinutes: number; }
+export interface DueWork { key: string; id: string; title: string; detailUrl: string; remainingMinutes: number; }
 export interface ReminderResult { sent: number; already: number; active: number; }
 
 // The real course list exposes a relative deadline such as "剩余41小时32分钟".
@@ -27,7 +30,8 @@ export function dueWorks(course: Course, works: CourseWork[], uid: string): DueW
     if (work.status.trim() !== '未交' || !/^\d+$/.test(work.id)) continue;
     const minutes: number | undefined = remainingMinutes(work.deadlineText);
     if (minutes !== undefined && minutes <= AHEAD_MINUTES) {
-      due.push({ key: `${uid}:${course.courseId}:${course.classId}:${work.id}`, title: work.title, remainingMinutes: minutes });
+      due.push({ key: `${uid}:${course.courseId}:${course.classId}:${work.id}`, id: work.id,
+        title: work.title, detailUrl: work.detailUrl, remainingMinutes: minutes });
     }
   }
   return due;
@@ -57,6 +61,11 @@ function notificationId(key: string): number {
 // scheduled percentage. Persist the reservation before publishing so a restart
 // cannot send the same work twice.
 export async function remindDueWorks(course: Course, works: CourseWork[], context: common.UIAbilityContext): Promise<ReminderResult> {
+  const settings: preferences.Preferences = preferences.getPreferencesSync(context, { name: 'ui_settings' });
+  if (!(settings.getSync('reminders_enabled', true) as boolean)) {
+    hilog.info(0x0a01, 'WorkReminder', '作业截止提醒已关闭，跳过发布');
+    return { sent: 0, already: 0, active: 0 };
+  }
   const cookie: string = SessionManager.get().cookieHeaderFor('mooc.mooc.ucas.edu.cn');
   const uid: string = /(?:^|;\s*)_uid=(\d+)/.exec(cookie)?.[1] ?? '';
   const due: DueWork[] = dueWorks(course, works, uid);
@@ -79,7 +88,13 @@ export async function remindDueWorks(course: Course, works: CourseWork[], contex
       // honor the once-per-work rule; the UI reports the failure.
       saveKeys(path, keys.concat([work.key]));
       const id: number = notificationId(work.key);
+      const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'cn.edu.ucas.gkdonline',
+        abilityName: 'EntryAbility', parameters: { gkdWorkId: work.id, gkdWorkTitle: work.title,
+          gkdWorkUrl: work.detailUrl, gkdCourseId: course.courseId, gkdClassId: course.classId } }],
+        operationType: wantAgent.OperationType.START_ABILITY, requestCode: id,
+        wantAgentFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
       await notificationManager.publish({ id: id, appMessageId: work.key,
+        wantAgent: agent,
         notificationSlotType: notificationManager.SlotType.SERVICE_INFORMATION,
         content: { notificationContentType: notificationManager.ContentType.NOTIFICATION_CONTENT_BASIC_TEXT,
           normal: { title: '作业即将截止', text: `${course.name} · ${work.title}，${work.remainingMinutes >= 60 ?

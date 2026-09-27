@@ -1,12 +1,15 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { SessionManager, SessionState, ServerCheckStatus } from '../auth/SessionManager';
-import { EndpointProbe, probeCourseList } from '../api/CourseApi';
-import { probeResourceEndpoints } from '../api/ResourceProbe';
-import { probeStudy } from '../api/StudyProbe';
+import { bundleManager } from '@kit.AbilityKit';
+import { SessionManager, SessionState } from '../auth/SessionManager';
 import { PageLoading } from './CoursesView';
 
 const DOMAIN: number = 0x0a01;
 const TAG: string = 'MineView';
+
+// HomeView is outside this task's edit boundary. Index installs the route here.
+export class MineSettingsNavigation {
+  static open: () => void = () => {};
+}
 
 @ComponentV2
 export struct MineView {
@@ -16,12 +19,7 @@ export struct MineView {
   private active: boolean = false;
   @Local private ready: boolean = false;
   @Local private loggedIn: boolean = false;
-  @Local private loginOrigin: string = '';
-  @Local private savedAt: number = 0;
-  @Local private savedDomains: string[] = [];
-  @Local private serverCheck: ServerCheckStatus = ServerCheckStatus.UNCHECKED;
-  @Local private probing: boolean = false;
-  @Local private probes: EndpointProbe[] = [];
+  @Local private versionName: string = '';
   @Local private logoutError: boolean = false;
   @Local private logoutConfirming: boolean = false;
 
@@ -29,61 +27,25 @@ export struct MineView {
     const state: SessionState = this.session.snapshot();
     this.ready = state.ready;
     this.loggedIn = state.loggedIn;
-    this.loginOrigin = state.loginOrigin;
-    this.savedAt = state.savedAt;
-    this.savedDomains = this.session.domains();
-    this.serverCheck = state.serverCheck;
   }
 
   aboutToAppear(): void {
     this.active = true;
-    this.listener = () => {
-      if (this.active) this.syncSession();
-    };
+    this.listener = () => { if (this.active) this.syncSession(); };
     this.session.subscribe(this.listener);
     this.syncSession();
+    try {
+      this.versionName = bundleManager.getBundleInfoForSelfSync(
+        bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT).versionName;
+    } catch (error) {
+      hilog.error(DOMAIN, TAG, '读取应用版本失败: %{public}s', (error as Error).message);
+    }
   }
 
   aboutToDisappear(): void {
     this.active = false;
     this.session.unsubscribe(this.listener);
   }
-
-  private formatTime(timestamp: number): string {
-    return timestamp > 0 ? new Date(timestamp).toLocaleString() : '';
-  }
-
-  private async probe(includeResources: boolean = false): Promise<void> {
-    if (this.probing) return;
-    this.probing = true;
-    try {
-      this.probes = await probeCourseList();
-      let verified: boolean = false;
-      for (const probe of this.probes) {
-        if (probe.ok && probe.recognized) {
-          verified = true;
-        }
-      }
-      this.session.setServerCheck(verified ? ServerCheckStatus.PASSED : ServerCheckStatus.FAILED);
-      if (includeResources) {
-        const context = this.getUIContext().getHostContext();
-        if (context === undefined) throw new Error('无法取得自检样本目录');
-        await probeResourceEndpoints(context.filesDir, (result: EndpointProbe) => {
-          if (this.active) this.probes = this.probes.concat([result]);
-        });
-        await probeStudy(context.filesDir, (result: EndpointProbe) => {
-          if (this.active) this.probes = this.probes.concat([result]);
-        });
-      }
-    } catch (error) {
-      const err: Error = error as Error;
-      hilog.error(DOMAIN, TAG, '连接自检失败: %{public}s', err.message);
-      this.session.setServerCheck(ServerCheckStatus.FAILED);
-    } finally {
-      this.probing = false;
-    }
-  }
-
 
   private async logout(): Promise<void> {
     this.logoutError = false;
@@ -109,193 +71,85 @@ export struct MineView {
     } finally { this.logoutConfirming = false; }
   }
 
+  @Builder
+  private groupHeader(title: Resource) {
+    Text(title)
+      .fontSize($r('app.float.ui_text_label'))
+      .fontColor($r('app.color.ui_text_tertiary'))
+      .padding({ left: $r('app.float.ui_space_page'), bottom: $r('app.float.ui_space_content') })
+  }
+
   build() {
     Column() {
       if (!this.ready) {
-        Column() {
-          PageLoading({ message: $r('app.string.loading_session') })
-        }
-        .width('100%').layoutWeight(1)
-        .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-        .justifyContent(FlexAlign.Center)
-      } else if (!this.loggedIn) {
-        Column({ space: $r('app.float.ui_space_section') }) {
-          Column({ space: $r('app.float.ui_space_section') }) {
-            Row({ space: $r('app.float.ui_space_card') }) {
-              SymbolGlyph($r('sys.symbol.person'))
-                .fontSize($r('app.float.ui_size_guest_icon'))
-                .fontColor([$r('app.color.ui_text_secondary')])
-              Column({ space: $r('app.float.ui_space_content') }) {
-                Text($r('app.string.mine_not_logged_in'))
-                  .fontSize($r('app.float.ui_text_page_title'))
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor($r('app.color.ui_text_primary'))
-                Text($r('app.string.mine_guest_description'))
-                  .fontSize($r('app.float.ui_text_body'))
-                  .fontColor($r('app.color.ui_text_secondary'))
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            }.width('100%')
-            Button($r('app.string.login_action'))
-              .width('100%')
-              .height($r('app.float.ui_size_primary_button'))
-              .fontSize($r('app.float.ui_text_button'))
-              .borderRadius($r('app.float.ui_radius_button'))
-              .backgroundColor($r('app.color.ui_accent'))
-              .onClick(() => { this.onRequestLogin(); })
-          }
-          .width('100%')
-          .padding($r('app.float.ui_space_card'))
-          .backgroundColor($r('app.color.ui_surface'))
-          .borderRadius($r('app.float.ui_radius_card'))
-          Column({ space: $r('app.float.ui_space_content') }) {
-            Text($r('app.string.mine_about_title'))
-              .fontSize($r('app.float.ui_text_label'))
-              .fontColor($r('app.color.ui_text_tertiary'))
-            Text($r('app.string.EntryAbility_label'))
-              .fontSize($r('app.float.ui_text_body'))
-              .fontColor($r('app.color.ui_text_primary'))
-            Text($r('app.string.sample_data_notice'))
-              .fontSize($r('app.float.ui_text_label'))
-              .fontColor($r('app.color.ui_text_secondary'))
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding($r('app.float.ui_space_card'))
-          .backgroundColor($r('app.color.ui_surface'))
-          .borderRadius($r('app.float.ui_radius_card'))
-        }
-        .width('100%').layoutWeight(1)
-        .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-        .justifyContent(FlexAlign.Center)
+        Column() { PageLoading({ message: $r('app.string.loading_session') }) }
+          .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
       } else {
         List() {
-          ListItem() {
-            Column({ space: $r('app.float.ui_space_content') }) {
-              Text($r('app.string.local_credentials_present'))
-                .fontSize($r('app.float.ui_text_card_title'))
-                .fontColor($r('app.color.ui_text_primary'))
-                .fontWeight(FontWeight.Medium)
-              Text($r('app.string.server_check_label'))
-                .fontSize($r('app.float.ui_text_label'))
-                .fontColor($r('app.color.ui_text_tertiary'))
-              if (this.serverCheck === ServerCheckStatus.UNCHECKED) {
-                Text($r('app.string.server_check_unchecked'))
-                  .fontSize($r('app.float.ui_text_body'))
-                  .fontColor($r('app.color.ui_text_secondary'))
-              } else if (this.serverCheck === ServerCheckStatus.PASSED) {
-                Text($r('app.string.server_check_passed'))
-                  .fontSize($r('app.float.ui_text_body'))
-                  .fontColor($r('app.color.ui_accent'))
-              } else {
-                Text($r('app.string.server_check_failed'))
-                  .fontSize($r('app.float.ui_text_body'))
-                  .fontColor($r('app.color.ui_error'))
-              }
-              Text($r('app.string.login_origin_label'))
-                .fontSize($r('app.float.ui_text_label'))
-                .fontColor($r('app.color.ui_text_tertiary'))
-              Text(this.loginOrigin)
-                .fontSize($r('app.float.ui_text_body'))
-                .fontColor($r('app.color.ui_text_primary'))
-              Text($r('app.string.saved_at_label'))
-                .fontSize($r('app.float.ui_text_label'))
-                .fontColor($r('app.color.ui_text_tertiary'))
-              Text(this.formatTime(this.savedAt))
-                .fontSize($r('app.float.ui_text_body'))
-                .fontColor($r('app.color.ui_text_primary'))
-              Text($r('app.string.saved_domains_label'))
-                .fontSize($r('app.float.ui_text_label'))
-                .fontColor($r('app.color.ui_text_tertiary'))
-              ForEach(this.savedDomains, (domain: string) => {
-                Text(domain)
-                  .fontSize($r('app.float.ui_text_body'))
-                  .fontColor($r('app.color.ui_text_secondary'))
-              }, (domain: string) => domain)
-            }
-            .width('100%').alignItems(HorizontalAlign.Start)
-            .padding($r('app.float.ui_space_card'))
-            .backgroundColor($r('app.color.ui_surface'))
-            .borderRadius($r('app.float.ui_radius_card'))
-          }.margin({ top: $r('app.float.ui_space_page_top'), bottom: $r('app.float.ui_space_list') })
-            .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          ListItem() {
-            Column({ space: $r('app.float.ui_space_content') }) {
-              Button($r('app.string.connection_probe'))
-                .width('100%')
-                .height($r('app.float.ui_size_primary_button'))
-                .fontSize($r('app.float.ui_text_button'))
-                .borderRadius($r('app.float.ui_radius_button'))
-                .backgroundColor($r('app.color.ui_accent'))
-                .enabled(!this.probing)
-                .onClick(() => { this.probe(); })
-              if (this.probing) {
-                PageLoading({ message: $r('app.string.probe_running') })
-                  .width('100%')
-              }
-              Button($r('app.string.resource_probe'))
-                .width('100%')
-                .height($r('app.float.ui_size_primary_button'))
-                .fontSize($r('app.float.ui_text_button'))
-                .fontColor($r('app.color.ui_accent'))
-                .borderRadius($r('app.float.ui_radius_button'))
-                .backgroundColor($r('app.color.ui_accent_soft'))
-                .enabled(!this.probing)
-                .onClick(() => { this.probe(true); })
-              Button($r('app.string.logout'))
-                .width('100%')
-                .height($r('app.float.ui_size_primary_button'))
-                .fontSize($r('app.float.ui_text_button'))
-                .fontColor($r('app.color.ui_accent'))
-                .borderRadius($r('app.float.ui_radius_button'))
-                .backgroundColor($r('app.color.ui_accent_soft'))
-                .enabled(!this.logoutConfirming)
-                .onClick(() => { this.confirmLogout(); })
-              if (this.logoutError) {
-                Text($r('app.string.logout_error'))
-                  .fontSize($r('app.float.ui_text_label'))
-                  .fontColor($r('app.color.ui_error'))
-              }
-            }
-            .width('100%')
-            .padding($r('app.float.ui_space_card'))
-            .backgroundColor($r('app.color.ui_surface'))
-            .borderRadius($r('app.float.ui_radius_card'))
-          }.margin({ bottom: this.probes.length === 0 ?
-            $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
-            .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          ForEach(this.probes, (probe: EndpointProbe, index: number) => {
+          ListItemGroup({ header: this.groupHeader($r('app.string.mine_account_group')) }) {
             ListItem() {
               Column({ space: $r('app.float.ui_space_content') }) {
-                Text(probe.url)
-                  .fontSize($r('app.float.ui_text_body'))
+                Text(this.loggedIn ? $r('app.string.mine_logged_in') : $r('app.string.mine_not_logged_in'))
+                  .fontSize($r('app.float.ui_text_card_title'))
+                  .fontWeight(FontWeight.Medium)
                   .fontColor($r('app.color.ui_text_primary'))
-                Text(`${probe.status}  ${probe.contentType}`)
+                Text(this.loggedIn ? $r('app.string.service_domain') : $r('app.string.mine_guest_description'))
+                  .fontSize($r('app.float.ui_text_body'))
+                  .fontColor($r('app.color.ui_text_secondary'))
+              }.width('100%').alignItems(HorizontalAlign.Start)
+                .padding($r('app.float.ui_space_card'))
+                .backgroundColor($r('app.color.ui_surface'))
+                .borderRadius($r('app.float.ui_radius_card'))
+            }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
+            ListItem() {
+              Column({ space: $r('app.float.ui_space_content') }) {
+                Button(this.loggedIn ? $r('app.string.logout') : $r('app.string.login_action'))
+                  .width('100%').height($r('app.float.ui_size_primary_button'))
+                  .fontSize($r('app.float.ui_text_button'))
+                  .borderRadius($r('app.float.ui_radius_button'))
+                  .backgroundColor(this.loggedIn ? $r('app.color.ui_accent_soft') : $r('app.color.ui_accent'))
+                  .fontColor(this.loggedIn ? $r('app.color.ui_accent') : $r('app.color.ui_surface'))
+                  .enabled(!this.logoutConfirming)
+                  .onClick(() => { if (this.loggedIn) this.confirmLogout(); else this.onRequestLogin(); })
+                if (this.logoutError) {
+                  Text($r('app.string.logout_error'))
+                    .fontSize($r('app.float.ui_text_label'))
+                    .fontColor($r('app.color.ui_error'))
+                }
+              }.width('100%')
+            }.margin({ top: $r('app.float.ui_space_list') })
+              .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
+          }.margin({ top: $r('app.float.ui_space_page_top'), bottom: $r('app.float.ui_space_section') })
+          ListItemGroup({ header: this.groupHeader($r('app.string.settings_title')) }) {
+            ListItem() {
+              Row() {
+                Text($r('app.string.settings_title'))
+                  .fontSize($r('app.float.ui_text_body'))
+                  .fontColor($r('app.color.ui_text_primary')).layoutWeight(1)
+                Text('›').fontSize($r('app.float.ui_text_page_title'))
+                  .fontColor($r('app.color.ui_text_tertiary'))
+              }.width('100%').padding($r('app.float.ui_space_card'))
+                .backgroundColor($r('app.color.ui_surface'))
+                .borderRadius($r('app.float.ui_radius_card'))
+            }.onClick(() => { MineSettingsNavigation.open(); })
+              .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
+          }.margin({ bottom: $r('app.float.ui_space_section') })
+          ListItemGroup({ header: this.groupHeader($r('app.string.mine_about_title')) }) {
+            ListItem() {
+              Row() {
+                Text($r('app.string.EntryAbility_label'))
+                  .fontSize($r('app.float.ui_text_body'))
+                  .fontColor($r('app.color.ui_text_primary')).layoutWeight(1)
+                Text(this.versionName)
                   .fontSize($r('app.float.ui_text_label'))
                   .fontColor($r('app.color.ui_text_secondary'))
-                if (probe.note.length > 0) {
-                  Text(probe.note)
-                    .fontSize($r('app.float.ui_text_label'))
-                    .fontColor($r('app.color.ui_text_secondary'))
-                }
-                if (probe.preview.length > 0) {
-                  Text(probe.preview)
-                    .fontSize($r('app.float.ui_text_label'))
-                    .fontColor($r('app.color.ui_text_tertiary'))
-                }
-              }
-              .width('100%').alignItems(HorizontalAlign.Start)
-              .padding($r('app.float.ui_space_card'))
-              .backgroundColor($r('app.color.ui_surface'))
-              .borderRadius($r('app.float.ui_radius_card'))
-            }.margin({ bottom: index === this.probes.length - 1 ?
-              $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
-              .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          }, (probe: EndpointProbe) => probe.url)
+              }.width('100%').padding($r('app.float.ui_space_card'))
+                .backgroundColor($r('app.color.ui_surface'))
+                .borderRadius($r('app.float.ui_radius_card'))
+            }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
+          }.margin({ bottom: $r('app.float.ui_space_page') })
         }.width('100%').layoutWeight(1)
       }
-    }
-    .width('100%').height('100%')
-    .padding({ bottom: this.ready && this.loggedIn ? 0 : $r('app.float.ui_space_page') })
-    .backgroundColor($r('app.color.ui_canvas'))
+    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
   }
 }

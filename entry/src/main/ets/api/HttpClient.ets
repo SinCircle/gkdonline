@@ -68,6 +68,8 @@ export interface HttpSpec {
   contentType?: string;
   /** 不传则按目标主机从会话里自动挑。 */
   cookie?: string;
+  /** Endpoint-specific request headers (for example the notice H5 AJAX headers). */
+  headers?: Record<string, string>;
 }
 
 async function sendOnce(spec: HttpSpec): Promise<HttpResult> {
@@ -81,6 +83,9 @@ async function sendOnce(spec: HttpSpec): Promise<HttpResult> {
       const headers: Record<string, string> = {};
       headers['User-Agent'] = USER_AGENT;
       headers['Accept'] = '*/*';
+      if (spec.headers) {
+        for (const key of Object.keys(spec.headers)) headers[key] = spec.headers[key];
+      }
 
       const cookie: string = spec.cookie !== undefined && hostOf(currentUrl) === hostOf(spec.url) ?
         spec.cookie : SessionManager.get().cookieHeaderFor(hostOf(currentUrl));

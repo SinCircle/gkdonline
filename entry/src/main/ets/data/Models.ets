@@ -31,8 +31,12 @@ export interface CourseCatalog {
 
 export interface Notice {
   id: string;
+  uuid: string;
   title: string;
   content: string;
   time: string;
+  sender: string;
   read: boolean;
+  bodyText: string;
+  workUrl: string;
 }

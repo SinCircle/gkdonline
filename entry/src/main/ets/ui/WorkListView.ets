@@ -4,8 +4,13 @@ import { fetchCourseWork } from '../api/WorkApi';
 import { ApiError, ApiErrorKind } from '../api/errors';
 import { SessionManager } from '../auth/SessionManager';
 import { common } from '@kit.AbilityKit';
-import { remindDueWorks, ReminderResult } from '../api/WorkReminder';
+import { remindDueWorks } from '../api/WorkReminder';
 import { ResourceStateView } from './ResourceViews';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { WorkChanged, WorkNavigation } from '../data/WorkNavigation';
+
+const DOMAIN: number = 0x0a01;
+const TAG: string = 'WorkListView';
 
 @ComponentV2
 export struct WorkListView {
@@ -20,17 +25,23 @@ export struct WorkListView {
   private version: number = 0;
   private sessionKey: string = '';
   private listener: () => void = () => {};
+  private workListener: (change: WorkChanged) => void = () => {};
 
   aboutToAppear(): void {
     this.active = true;
     this.listener = () => { this.syncSession(); };
     SessionManager.get().subscribe(this.listener);
+    this.workListener = (change: WorkChanged) => {
+      if (this.items.some((item: CourseWork) => item.id === change.workId)) this.refreshSilently();
+    };
+    WorkNavigation.get().subscribeChanged(this.workListener);
     this.syncSession();
   }
   aboutToDisappear(): void {
     this.active = false;
     this.version++;
     SessionManager.get().unsubscribe(this.listener);
+    WorkNavigation.get().unsubscribeChanged(this.workListener);
   }
   private syncSession(): void {
     const state = SessionManager.get().snapshot();
@@ -57,15 +68,28 @@ export struct WorkListView {
       if (this.active && version === this.version) this.failure = error instanceof ApiError ? error.kind : ApiErrorKind.NETWORK;
     } finally { if (this.active && version === this.version) this.loading = false; }
   }
+  private async refreshSilently(): Promise<void> {
+    const version: number = ++this.version;
+    const started: number = Date.now();
+    try {
+      const context = this.getUIContext().getHostContext();
+      if (!context) throw new Error('无法取得缓存目录');
+      const items: CourseWork[] = await fetchCourseWork(this.course, context.cacheDir);
+      if (this.active && version === this.version) {
+        this.items = items;
+        hilog.info(DOMAIN, TAG, '静默重取作业：课程 %{public}s，条目 %{public}d，耗时 %{public}d ms',
+          this.course.id, items.length, Date.now() - started);
+      }
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, '静默重取作业失败：课程 %{public}s：%{public}s', this.course.id, (error as Error).message);
+    }
+  }
   private async checkReminders(items: CourseWork[], version: number): Promise<void> {
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
       if (!context) throw new Error('无法取得应用目录');
-      const result: ReminderResult = await remindDueWorks(this.course, items, context);
-      if (this.active && version === this.version && result.sent > 0) {
-        this.reminderMessage = `已发送 ${result.sent} 条本地作业截止提醒` +
-          (result.active > 0 ? ` · 通知中心已确认 ${result.active} 条` : '');
-      }
+      await remindDueWorks(this.course, items, context);
+      // Successful delivery is intentionally silent; only failures need inline text.
     } catch (error) {
       if (this.active && version === this.version) this.reminderMessage = `本地提醒未发送：${(error as Error).message}`;
     }
@@ -81,19 +105,13 @@ export struct WorkListView {
           onRetry: () => { this.refresh(); }, onRequestLogin: () => { this.onRequestLogin(); } })
       } else {
         List() {
-          ListItem() {
-            Column({ space: $r('app.float.ui_space_content') }) {
-              Row() {
-                Text($r('app.string.work_list_scope')).fontSize($r('app.float.ui_text_label')).layoutWeight(1)
-                  .fontColor($r('app.color.ui_text_secondary'))
-              }.width('100%')
-              if (this.reminderMessage) {
-                Text(this.reminderMessage).fontSize($r('app.float.ui_text_label'))
-                  .fontColor($r('app.color.ui_text_secondary')).width('100%')
-              }
-            }.width('100%').alignItems(HorizontalAlign.Start)
-          }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-            .margin({ top: $r('app.float.ui_space_page_top'), bottom: $r('app.float.ui_space_list') })
+          if (this.reminderMessage) {
+            ListItem() {
+              Text(this.reminderMessage).fontSize($r('app.float.ui_text_label'))
+                .fontColor($r('app.color.ui_text_secondary')).width('100%')
+            }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
+              .margin({ top: $r('app.float.ui_space_page_top'), bottom: $r('app.float.ui_space_list') })
+          }
           ForEach(this.items, (item: CourseWork, index: number) => {
             ListItem() {
               Column({ space: $r('app.float.ui_space_content') }) {
@@ -107,7 +125,8 @@ export struct WorkListView {
                 .backgroundColor($r('app.color.ui_surface')).borderRadius($r('app.float.ui_radius_card'))
                 .onClick(() => { this.onOpenWork(item); })
             }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-              .margin({ bottom: index === this.items.length - 1 ? $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
+              .margin({ top: index === 0 && !this.reminderMessage ? $r('app.float.ui_space_page_top') : 0,
+                bottom: index === this.items.length - 1 ? $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
           }, (item: CourseWork) => item.id)
         }.width('100%').layoutWeight(1)
       }
