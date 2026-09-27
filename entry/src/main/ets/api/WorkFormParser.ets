@@ -14,6 +14,32 @@ function scriptFunction(html: string, name: string, next: string): string {
   return start >= 0 && end > start ? html.substring(start, end).replace(/\s+/g, '') : '';
 }
 
+// The submitted page supplies its own GET navigation for revising an answer.
+// Accept only a literal string concatenation from modifyAnswer; never run its JavaScript.
+export function parseWorkModifyUrl(html: string): string {
+  const body: string = /function\s+modifyAnswer\s*\(\s*\)\s*\{([\s\S]*?)\}/.exec(html)?.[1] ?? '';
+  const expression: string = /location\.href\s*=\s*([^;]+);/.exec(body)?.[1] ?? '';
+  if (!/^\s*(?:"[^"\\]*"|'[^'\\]*')(?:\s*\+\s*(?:"[^"\\]*"|'[^'\\]*'))*\s*$/.test(expression)) return '';
+  const parts: RegExpMatchArray | null = expression.match(/"[^"\\]*"|'[^'\\]*'/g);
+  if (!parts) return '';
+  const target: string = resolveUrl('https://mooc.mooc.ucas.edu.cn', parts.map((part: string) => part.substring(1, part.length - 1)).join(''));
+  if (hostOf(target) !== 'mooc.mooc.ucas.edu.cn' || !target.startsWith('https://mooc.mooc.ucas.edu.cn/mooc-ans/mooc2/work/dowork?')) return '';
+  const query: string = target.substring(target.indexOf('?') + 1);
+  const pairs: string[] = query.split('&');
+  const keys: string[] = pairs.map((pair: string) => pair.split('=')[0]);
+  if (new Set(keys).size !== keys.length || /[#\s]/.test(query)) return '';
+  for (const name of ['courseId', 'classId', 'cpi', 'workId', 'answerId']) {
+    const value: string = pairs.find((pair: string) => pair.startsWith(name + '='))?.substring(name.length + 1) ?? '';
+    if (!/^[1-9]\d*$/.test(value)) return '';
+  }
+  for (const name of ['standardEnc', 'enc']) {
+    const value: string = pairs.find((pair: string) => pair.startsWith(name + '='))?.substring(name.length + 1) ?? '';
+    if (!/^[a-fA-F0-9]{32}$/.test(value)) return '';
+  }
+  if (!keys.includes('knowledgeId') || !keys.includes('jobid')) return '';
+  return target;
+}
+
 // Parses HTML and reads known script literals as text. Never executes page JavaScript.
 export function parseWorkSubmission(html: string, questions: WorkQuestion[]): WorkSubmissionForm | undefined {
   const root: HtmlNode = parseHtml(html);
