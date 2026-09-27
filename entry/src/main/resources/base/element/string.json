@@ -1,0 +1,298 @@
+{
+  "string": [
+    { "name": "permission_camera_reason", "value": "拍摄作业附件照片" },
+    { "name": "permission_microphone_reason", "value": "录制作业附件音频" },
+    {
+      "name": "course_detail",
+      "value": "课程详情"
+    },
+    {
+      "name": "course_chapters",
+      "value": "章节"
+    },
+    {
+      "name": "course_resources",
+      "value": "资源"
+    },
+    {
+      "name": "course_materials",
+      "value": "课程资料"
+    },
+    {
+      "name": "resource_folder",
+      "value": "文件夹"
+    },
+    {
+      "name": "chapters_empty",
+      "value": "本课程暂无章节内容"
+    },
+    {
+      "name": "resources_empty",
+      "value": "此处暂无可浏览的文件或媒体资源"
+    },
+    {
+      "name": "resources_loading",
+      "value": "正在加载课程资源…"
+    },
+    {
+      "name": "resources_login_required",
+      "value": "请先登录，再查看课程资源"
+    },
+    {
+      "name": "resources_network_error",
+      "value": "网络连接失败，请检查网络后重试"
+    },
+    {
+      "name": "resources_parse_error",
+      "value": "暂时无法识别课程资源内容，请重试"
+    },
+    {
+      "name": "resources_load_error",
+      "value": "课程资源请求失败，请稍后重试"
+    },
+    {
+      "name": "resource_probe",
+      "value": "资源与作业自检"
+    },
+    {
+      "name": "course_all_semesters",
+      "value": "全部学期"
+    },
+    {
+      "name": "course_search_hint",
+      "value": "搜索课程"
+    },
+    {
+      "name": "courses_login_required",
+      "value": "请先登录，或重新登录后查看课程"
+    },
+    {
+      "name": "courses_network_error",
+      "value": "网络连接失败，请检查网络后重试"
+    },
+    {
+      "name": "courses_parse_error",
+      "value": "课程或学期数据解析失败，请重试"
+    },
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "国科大在线"
+    },
+    {
+      "name": "loading_session",
+      "value": "正在读取登录状态…"
+    },
+    {
+      "name": "login_title",
+      "value": "国科大在线"
+    },
+    {
+      "name": "login_instruction",
+      "value": "请在下方学校统一认证（SEP）页面登录：用户名是国科大邮箱，密码是学校密码。我们只读取登录凭证，不接触密码。"
+    },
+    {
+      "name": "login_back",
+      "value": "返回主页"
+    },
+    {
+      "name": "login_confirm",
+      "value": "我已登录"
+    },
+    {
+      "name": "login_not_detected",
+      "value": "还没有检测到登录状态，请先在上方网页完成登录"
+    },
+    {
+      "name": "login_load_error",
+      "value": "登录网页加载失败，请检查网络后重试"
+    },
+    {
+      "name": "login_capture_error",
+      "value": "读取或保存登录状态失败，请稍后重试"
+    },
+    {
+      "name": "login_page_not_ready",
+      "value": "页面还没加载好，请稍后再试"
+    },
+    {
+      "name": "tab_courses",
+      "value": "课程"
+    },
+    {
+      "name": "tab_notices",
+      "value": "通知"
+    },
+    {
+      "name": "tab_mine",
+      "value": "我的"
+    },
+    {
+      "name": "sample_data_notice",
+      "value": "示例数据 · 尚未接入真实接口"
+    },
+    {
+      "name": "courses_loading",
+      "value": "正在加载课程…"
+    },
+    {
+      "name": "courses_empty",
+      "value": "暂无课程"
+    },
+    {
+      "name": "notices_loading",
+      "value": "正在加载通知…"
+    },
+    {
+      "name": "notices_empty",
+      "value": "暂无通知"
+    },
+    {
+      "name": "courses_load_error",
+      "value": "课程加载失败，请重试"
+    },
+    {
+      "name": "notices_load_error",
+      "value": "通知加载失败，请重试"
+    },
+    {
+      "name": "notices_access_denied",
+      "value": "通知接口被服务端拒绝"
+    },
+    {
+      "name": "retry_load",
+      "value": "重新加载"
+    },
+    {
+      "name": "course_teacher",
+      "value": "教师："
+    },
+    {
+      "name": "course_unfinished_work",
+      "value": "未完成作业"
+    },
+    {
+      "name": "notice_read",
+      "value": "已读"
+    },
+    {
+      "name": "notice_unread",
+      "value": "未读"
+    },
+    {
+      "name": "mine_not_logged_in",
+      "value": "未登录"
+    },
+    {
+      "name": "mine_guest_description",
+      "value": "登录后查看凭证与连接状态"
+    },
+    {
+      "name": "mine_about_title",
+      "value": "关于"
+    },
+    {
+      "name": "login_action",
+      "value": "登录"
+    },
+    {
+      "name": "courses_placeholder",
+      "value": "课程列表将在 M2 实现"
+    },
+    {
+      "name": "notices_placeholder",
+      "value": "通知列表将在 M4 实现"
+    },
+    {
+      "name": "login_status_active",
+      "value": "登录状态：已登录"
+    },
+    {
+      "name": "local_credentials_present",
+      "value": "本地状态：已保存会话凭证"
+    },
+    {
+      "name": "server_check_label",
+      "value": "服务器校验"
+    },
+    {
+      "name": "server_check_unchecked",
+      "value": "未校验"
+    },
+    {
+      "name": "server_check_passed",
+      "value": "通过：受保护接口返回 JSON"
+    },
+    {
+      "name": "server_check_failed",
+      "value": "未通过：未取得可识别的接口响应"
+    },
+    {
+      "name": "login_origin_label",
+      "value": "登录落地地址"
+    },
+    {
+      "name": "saved_at_label",
+      "value": "凭证保存时间"
+    },
+    {
+      "name": "saved_domains_label",
+      "value": "已存凭证域名"
+    },
+    {
+      "name": "connection_probe",
+      "value": "刷新登录状态"
+    },
+    {
+      "name": "probe_running",
+      "value": "正在逐个检查候选接口…"
+    },
+    {
+      "name": "logout",
+      "value": "退出登录"
+    },
+    {
+      "name": "logout_error",
+      "value": "退出登录失败，请重试"
+    },
+    {
+      "name": "course_work",
+      "value": "作业"
+    },
+    {
+      "name": "work_empty",
+      "value": "暂无课程作业"
+    },
+    {
+      "name": "work_list_scope",
+      "value": "课程作业 · 点击查看题目"
+    },
+    {
+      "name": "work_loading",
+      "value": "正在加载作业…"
+    },
+    {
+      "name": "work_login_required",
+      "value": "请登录后查看作业"
+    },
+    {
+      "name": "work_network_error",
+      "value": "网络连接失败，未能加载作业"
+    },
+    {
+      "name": "work_parse_error",
+      "value": "暂时无法识别作业列表，请稍后重试"
+    },
+    {
+      "name": "work_load_error",
+      "value": "作业请求失败，请稍后重试"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+**/build
+/.hvigor
+.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/.appanalyzer
+# 验证产物（截图/布局 dump/裁剪图），不进版本库也不进 rg 索引
+/verification
+
+# 工具目录（内含自己的 .git，不纳入本仓库）
+/.codegenie

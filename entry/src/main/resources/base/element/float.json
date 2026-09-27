@@ -1,0 +1,25 @@
+{
+  "float": [
+    { "name": "ui_text_page_title", "value": "20fp" },
+    { "name": "ui_text_card_title", "value": "18fp" },
+    { "name": "ui_text_body", "value": "14fp" },
+    { "name": "ui_text_label", "value": "12fp" },
+    { "name": "ui_text_button", "value": "16fp" },
+    { "name": "ui_radius_card", "value": "18vp" },
+    { "name": "ui_radius_button", "value": "14vp" },
+    { "name": "ui_radius_type_icon", "value": "12vp" },
+    { "name": "ui_space_page", "value": "16vp" },
+    { "name": "ui_space_page_top", "value": "16vp" },
+    { "name": "ui_space_card", "value": "16vp" },
+    { "name": "ui_space_list", "value": "10vp" },
+    { "name": "ui_space_content", "value": "8vp" },
+    { "name": "ui_space_section", "value": "20vp" },
+    { "name": "ui_space_loading", "value": "12vp" },
+    { "name": "ui_size_loading", "value": "32vp" },
+    { "name": "ui_size_filter_control", "value": "40vp" },
+    { "name": "ui_size_primary_button", "value": "48vp" },
+    { "name": "ui_size_guest_icon", "value": "44vp" },
+    { "name": "ui_size_answer_input", "value": "180vp" },
+    { "name": "ui_size_badge", "value": "18vp" }
+  ]
+}

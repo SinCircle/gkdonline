@@ -1,0 +1,5 @@
+{
+  "@ohos.url": {
+    "source": "src/mock/url.mock.js"
+  }
+}
