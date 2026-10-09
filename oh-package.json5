@@ -1,6 +1,6 @@
 {
   "modelVersion": "26.0.0",
-  "description": "Please describe the basic information.",
+  "description": "国科大在线（非官方）的鸿蒙原生客户端，ArkTS / ArkUI 实现。",
   "dependencies": {
   },
   "devDependencies": {

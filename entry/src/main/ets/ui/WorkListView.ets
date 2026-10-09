@@ -18,6 +18,7 @@ export struct WorkListView {
   @Event onRequestLogin: () => void = () => {};
   @Event onOpenWork: (work: CourseWork) => void = () => {};
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private failure: ApiErrorKind | undefined = undefined;
   @Local private items: CourseWork[] = [];
   @Local private reminderMessage: string = '';
@@ -51,10 +52,10 @@ export struct WorkListView {
     this.sessionKey = key;
     this.refresh();
   }
-  private async refresh(): Promise<void> {
+  private async refresh(pull: boolean = false): Promise<void> {
     const version: number = ++this.version;
-    this.loading = true;
-    this.failure = undefined;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failure = undefined; }
     this.reminderMessage = '';
     try {
       const context = this.getUIContext().getHostContext();
@@ -62,11 +63,12 @@ export struct WorkListView {
       const items: CourseWork[] = await fetchCourseWork(this.course, context.cacheDir);
       if (this.active && version === this.version) {
         this.items = items;
+        this.failure = undefined;
         this.checkReminders(items, version);
       }
     } catch (error) {
       if (this.active && version === this.version) this.failure = error instanceof ApiError ? error.kind : ApiErrorKind.NETWORK;
-    } finally { if (this.active && version === this.version) this.loading = false; }
+    } finally { if (this.active && version === this.version) { this.loading = false; this.refreshing = false; } }
   }
   private async refreshSilently(): Promise<void> {
     const version: number = ++this.version;
@@ -100,11 +102,14 @@ export struct WorkListView {
   }
   build() {
     Column() {
-      if (this.loading || this.failure !== undefined || this.items.length === 0) {
-        ResourceStateView({ loading: this.loading, failure: this.failure, emptyMessage: $r('app.string.work_empty'), work: true,
-          onRetry: () => { this.refresh(); }, onRequestLogin: () => { this.onRequestLogin(); } })
-      } else {
+      Refresh({ refreshing: $$this.refreshing }) {
         List() {
+          if (this.loading || this.failure !== undefined || this.items.length === 0) {
+            ListItem() {
+              ResourceStateView({ loading: this.loading, failure: this.failure, emptyMessage: $r('app.string.work_empty'), work: true,
+                onRequestLogin: () => { this.onRequestLogin(); } })
+            }.height('100%').id('work-list-state-row')
+          } else {
           if (this.reminderMessage) {
             ListItem() {
               Text(this.reminderMessage).fontSize($r('app.float.ui_text_label'))
@@ -126,10 +131,16 @@ export struct WorkListView {
                 .onClick(() => { this.onOpenWork(item); })
             }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
               .margin({ top: index === 0 && !this.reminderMessage ? $r('app.float.ui_space_page_top') : 0,
-                bottom: index === this.items.length - 1 ? $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
+                bottom: index === this.items.length - 1 ? $r('app.float.ui_space_bottom_inset') : $r('app.float.ui_space_list') })
           }, (item: CourseWork) => item.id)
-        }.width('100%').layoutWeight(1)
-      }
-    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
+          }
+        }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+      }.width('100%').layoutWeight(1).onRefreshing(() => {
+        hilog.info(0x0a01, 'PullRefresh', 'work-list');
+        this.refresh(true);
+      })
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.ui_canvas'))
   }
 }

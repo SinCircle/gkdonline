@@ -88,7 +88,7 @@ export async function remindDueWorks(course: Course, works: CourseWork[], contex
       // honor the once-per-work rule; the UI reports the failure.
       saveKeys(path, keys.concat([work.key]));
       const id: number = notificationId(work.key);
-      const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'cn.edu.ucas.gkdonline',
+      const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'cn.edu.ucas.sincircle.gkdonline',
         abilityName: 'EntryAbility', parameters: { gkdWorkId: work.id, gkdWorkTitle: work.title,
           gkdWorkUrl: work.detailUrl, gkdCourseId: course.courseId, gkdClassId: course.classId } }],
         operationType: wantAgent.OperationType.START_ABILITY, requestCode: id,

@@ -1,4 +1,5 @@
 import { SymbolGlyphModifier } from '@kit.ArkUI';
+import { HdsTabs, hdsMaterial } from '@kit.UIDesignKit';
 import { CoursesView } from './CoursesView';
 import { NoticesView } from './NoticesView';
 import { MineView } from './MineView';
@@ -19,7 +20,7 @@ export struct HomeView {
   }
 
   build() {
-    Tabs({ barPosition: BarPosition.End, index: this.selectedTabIndex }) {
+    HdsTabs({ barPosition: BarPosition.End, index: this.selectedTabIndex }) {
       TabContent() {
         CoursesView({ onRequestLogin: () => { this.onRequestLogin(); },
           onOpenCourse: (course: Course) => { this.onOpenCourse(course); } })
@@ -38,7 +39,18 @@ export struct HomeView {
         $r('app.string.tab_mine')))
     }
     .scrollable(false)
+    .vertical(false)
+    .barOverlap(true)
+    .barFloatingStyle({
+      barBottomMargin: 28,
+      systemMaterialEffect: {
+        materialType: hdsMaterial.MaterialType.ADAPTIVE,
+        materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+      }
+    })
+    .expandSafeArea([], [])
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
     .onChange((index: number) => { this.onTabChange(index); })
-    .width('100%').height('100%')
+    .width('100%').height(LayoutPolicy.matchParent)
   }
 }

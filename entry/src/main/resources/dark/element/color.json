@@ -1,8 +1,35 @@
 {
   "color": [
-    {
-      "name": "start_window_background",
-      "value": "#000000"
-    }
+    { "name": "ui_canvas", "value": "#101720" },
+    { "name": "ui_surface", "value": "#1D2834" },
+    { "name": "ui_text_primary", "value": "#F4F7FA" },
+    { "name": "ui_text_secondary", "value": "#C4CDD8" },
+    { "name": "ui_text_tertiary", "value": "#A9B6C5" },
+    { "name": "ui_accent", "value": "#82B5FF" },
+    { "name": "ui_text_on_strong", "value": "#10243A" },
+    { "name": "ui_accent_soft", "value": "#183656" },
+    { "name": "ui_error", "value": "#FF858B" },
+    { "name": "ui_badge_number", "value": "#FF6A73" },
+    { "name": "ui_type_pdf", "value": "#FF9D96" },
+    { "name": "ui_type_pdf_soft", "value": "#4B2428" },
+    { "name": "ui_type_ppt", "value": "#FFC091" },
+    { "name": "ui_type_ppt_soft", "value": "#493020" },
+    { "name": "ui_type_doc", "value": "#9FC4FF" },
+    { "name": "ui_type_doc_soft", "value": "#233655" },
+    { "name": "ui_type_xls", "value": "#91D8AC" },
+    { "name": "ui_type_xls_soft", "value": "#214031" },
+    { "name": "ui_type_video", "value": "#C6A7FF" },
+    { "name": "ui_type_video_soft", "value": "#392B4D" },
+    { "name": "ui_type_audio", "value": "#84DAE2" },
+    { "name": "ui_type_audio_soft", "value": "#20424A" },
+    { "name": "ui_type_image", "value": "#F4A7D0" },
+    { "name": "ui_type_image_soft", "value": "#492A3E" },
+    { "name": "ui_type_archive", "value": "#DCB797" },
+    { "name": "ui_type_archive_soft", "value": "#3B3027" },
+    { "name": "ui_type_folder", "value": "#FFD17C" },
+    { "name": "ui_type_folder_soft", "value": "#443717" },
+    { "name": "ui_type_other", "value": "#C2CCD6" },
+    { "name": "ui_type_other_soft", "value": "#303943" },
+    { "name": "start_window_background", "value": "#000000" }
   ]
 }

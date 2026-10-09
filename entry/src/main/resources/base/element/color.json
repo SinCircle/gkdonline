@@ -6,6 +6,7 @@
     { "name": "ui_text_secondary", "value": "#5D6878" },
     { "name": "ui_text_tertiary", "value": "#8893A1" },
     { "name": "ui_accent", "value": "#0B59E8" },
+    { "name": "ui_text_on_strong", "value": "#FFFFFF" },
     { "name": "ui_accent_soft", "value": "#EAF1FF" },
     { "name": "ui_error", "value": "#B42318" },
     { "name": "ui_badge_number", "value": "#E02025" },
@@ -29,6 +30,6 @@
     { "name": "ui_type_folder_soft", "value": "#FBF2DD" },
     { "name": "ui_type_other", "value": "#66717D" },
     { "name": "ui_type_other_soft", "value": "#EDF0F3" },
-    { "name": "start_window_background", "value": "#0B59E8" }
+    { "name": "start_window_background", "value": "#FFFFFF" }
   ]
 }

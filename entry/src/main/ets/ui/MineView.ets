@@ -108,7 +108,7 @@ export struct MineView {
                   .fontSize($r('app.float.ui_text_button'))
                   .borderRadius($r('app.float.ui_radius_button'))
                   .backgroundColor(this.loggedIn ? $r('app.color.ui_accent_soft') : $r('app.color.ui_accent'))
-                  .fontColor(this.loggedIn ? $r('app.color.ui_accent') : $r('app.color.ui_surface'))
+                  .fontColor(this.loggedIn ? $r('app.color.ui_accent') : $r('app.color.ui_text_on_strong'))
                   .enabled(!this.logoutConfirming)
                   .onClick(() => { if (this.loggedIn) this.confirmLogout(); else this.onRequestLogin(); })
                 if (this.logoutError) {
@@ -148,6 +148,9 @@ export struct MineView {
                 .borderRadius($r('app.float.ui_radius_card'))
             }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
           }.margin({ bottom: $r('app.float.ui_space_page') })
+          ListItem() {
+            Column() {}.height($r('app.float.ui_space_floating_bar'))
+          }.id('mine-floating-bar-spacer')
         }.width('100%').layoutWeight(1)
       }
     }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))

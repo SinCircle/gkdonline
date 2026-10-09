@@ -183,6 +183,8 @@ export struct NoticeWorkWebView {
           .width('100%').padding($r('app.float.ui_space_page'))
           .id('notice-work-web-hint')
       }
-    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.ui_canvas'))
   }
 }

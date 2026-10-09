@@ -94,8 +94,10 @@ export struct CourseNotesView {
         }, (note: CourseNote) => note.id)
       }.width('100%').layoutWeight(1)
     }
-    .width('100%').height('100%')
-    .padding($r('app.float.ui_space_page'))
+    .width('100%').height(LayoutPolicy.matchParent)
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+    .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page'),
+      top: $r('app.float.ui_space_page'), bottom: $r('app.float.ui_space_bottom_inset') })
     .backgroundColor($r('app.color.ui_canvas'))
   }
 }

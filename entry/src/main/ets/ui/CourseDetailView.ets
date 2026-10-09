@@ -6,6 +6,7 @@ import { SessionManager } from '../auth/SessionManager';
 import { ResourceStateView } from './ResourceViews';
 import { WorkListView } from './WorkListView';
 import { CourseWork } from '../data/WorkModels';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 @ComponentV2
 export struct CourseDetailView {
@@ -15,6 +16,7 @@ export struct CourseDetailView {
   @Event onOpenWork: (work: CourseWork) => void = () => {};
   @Local private tab: number = 0;
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private failure: ApiErrorKind | undefined = undefined;
   @Local private chapters: Chapter[] = [];
   private active: boolean = false;
@@ -44,17 +46,17 @@ export struct CourseDetailView {
     this.refresh();
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(pull: boolean = false): Promise<void> {
     const version: number = ++this.version;
-    this.loading = true;
-    this.failure = undefined;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failure = undefined; }
     try {
       const catalog = await fetchChapters(this.course);
-      if (this.active && version === this.version) this.chapters = catalog.chapters;
+      if (this.active && version === this.version) { this.chapters = catalog.chapters; this.failure = undefined; }
     } catch (error) {
       if (this.active && version === this.version) this.failure = error instanceof ApiError ? error.kind : ApiErrorKind.PARSE;
     } finally {
-      if (this.active && version === this.version) this.loading = false;
+      if (this.active && version === this.version) { this.loading = false; this.refreshing = false; }
     }
   }
 
@@ -75,12 +77,12 @@ export struct CourseDetailView {
         Row({ space: $r('app.float.ui_space_content') }) {
           Button($r('app.string.course_resources')).layoutWeight(1).height($r('app.float.ui_size_filter_control'))
             .fontSize($r('app.float.ui_text_body'))
-            .fontColor(this.tab === 0 ? $r('app.color.ui_surface') : $r('app.color.ui_accent'))
+            .fontColor(this.tab === 0 ? $r('app.color.ui_text_on_strong') : $r('app.color.ui_accent'))
             .backgroundColor(this.tab === 0 ? $r('app.color.ui_accent') : $r('app.color.ui_accent_soft'))
             .onClick(() => { this.tab = 0; })
           Button($r('app.string.course_work')).layoutWeight(1).height($r('app.float.ui_size_filter_control'))
             .fontSize($r('app.float.ui_text_body'))
-            .fontColor(this.tab === 1 ? $r('app.color.ui_surface') : $r('app.color.ui_accent'))
+            .fontColor(this.tab === 1 ? $r('app.color.ui_text_on_strong') : $r('app.color.ui_accent'))
             .backgroundColor(this.tab === 1 ? $r('app.color.ui_accent') : $r('app.color.ui_accent_soft'))
             .onClick(() => { this.tab = 1; })
         }.width('100%')
@@ -107,11 +109,14 @@ export struct CourseDetailView {
             .fontColor($r('app.color.ui_text_secondary'))
             .width('100%').textAlign(TextAlign.Start)
             .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          if (this.loading || this.failure !== undefined || this.chapters.length === 0) {
-            ResourceStateView({ loading: this.loading, failure: this.failure, emptyMessage: $r('app.string.chapters_empty'),
-              onRetry: () => { this.refresh(); }, onRequestLogin: () => { this.onRequestLogin(); } }).layoutWeight(1)
-          } else {
+          Refresh({ refreshing: $$this.refreshing }) {
           List() {
+          if (this.loading || this.failure !== undefined || this.chapters.length === 0) {
+            ListItem() {
+              ResourceStateView({ loading: this.loading, failure: this.failure, emptyMessage: $r('app.string.chapters_empty'),
+                onRequestLogin: () => { this.onRequestLogin(); } })
+            }.height('100%').id('chapters-state-row')
+          } else {
           ForEach(this.chapters, (chapter: Chapter, index: number) => {
             ListItem() {
               Row({ space: $r('app.float.ui_space_content') }) {
@@ -128,12 +133,18 @@ export struct CourseDetailView {
                 .onClick(() => { if (!chapter.group) this.onOpenResources(this.resources(chapter)); })
             }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
               .margin({ top: index === 0 ? $r('app.float.ui_space_list') : 0,
-                bottom: index === this.chapters.length - 1 ? $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
+                bottom: index === this.chapters.length - 1 ? $r('app.float.ui_space_bottom_inset') : $r('app.float.ui_space_list') })
           }, (chapter: Chapter) => chapter.id)
-          }.width('100%').layoutWeight(1)
           }
+          }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+          }.width('100%').layoutWeight(1).onRefreshing(() => {
+            hilog.info(0x0a01, 'PullRefresh', 'chapters');
+            this.refresh(true);
+          })
         }.width('100%').layoutWeight(1)
       }
-    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.ui_canvas'))
   }
 }

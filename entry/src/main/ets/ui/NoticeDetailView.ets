@@ -21,28 +21,35 @@ export struct NoticeDetailView {
   @Event onRequestLogin: () => void = () => {};
   @Local private detail: Notice | undefined = undefined;
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private failure: string = '';
   @Local private opening: boolean = false;
   @Local private workFailure: string = '';
   @Local private workLoginRequired: boolean = false;
   private active: boolean = false;
+  private version: number = 0;
 
   aboutToAppear(): void {
     this.active = true;
     this.refresh();
   }
 
-  aboutToDisappear(): void { this.active = false; }
+  aboutToDisappear(): void { this.active = false; this.version++; this.refreshing = false; }
 
-  private async refresh(): Promise<void> {
-    this.loading = true;
-    this.failure = '';
+  private async refresh(pull: boolean = false): Promise<void> {
+    const version: number = ++this.version;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failure = ''; }
     try {
       const detail: Notice = await fetchNoticeDetail(this.notice.uuid);
-      if (this.active) this.detail = detail;
+      if (this.active && version === this.version) { this.detail = detail; this.failure = ''; }
     } catch (error) {
-      if (this.active) this.failure = (error as Error).message;
-    } finally { if (this.active) this.loading = false; }
+      // 界面只给友好文案；原始错误可能是解析器的内部串（如「通知详情缺少 msg.uuid」），只进日志。
+      hilog.error(DOMAIN, TAG, '通知详情加载失败：%{public}s', (error as Error).message);
+      if (this.active && version === this.version) this.failure = '通知内容加载失败，请下拉重试';
+    } finally {
+      if (this.active && version === this.version) { this.loading = false; this.refreshing = false; }
+    }
   }
 
   /**
@@ -124,16 +131,17 @@ export struct NoticeDetailView {
 
   build() {
     Column() {
+      Refresh({ refreshing: $$this.refreshing }) {
+        Scroll() {
       if (this.loading) {
         PageLoading({ message: $r('app.string.notices_loading') })
-          .width('100%').layoutWeight(1)
+          .width('100%').height('100%')
       } else if (this.failure) {
         Column({ space: $r('app.float.ui_space_section') }) {
           Text(this.failure).fontSize($r('app.float.ui_text_body'))
-          Button($r('app.string.retry_load')).onClick(() => { this.refresh(); })
-        }.width('100%').layoutWeight(1).padding($r('app.float.ui_space_page'))
+        }.width('100%').height('100%').justifyContent(FlexAlign.Center)
+          .padding($r('app.float.ui_space_page')).id('notice-detail-failure')
       } else if (this.detail) {
-        Scroll() {
           Column({ space: $r('app.float.ui_space_section') }) {
             Text(this.detail.title)
               .fontSize($r('app.float.ui_text_page_title'))
@@ -155,7 +163,7 @@ export struct NoticeDetailView {
               Button(this.opening ? $r('app.string.notice_opening_work') : $r('app.string.notice_open_work'))
                 .width('100%').height($r('app.float.ui_size_primary_button'))
                 .backgroundColor($r('app.color.ui_accent'))
-                .fontColor(Color.White)
+                .fontColor($r('app.color.ui_text_on_strong'))
                 .enabled(!this.opening)
                 .onClick(() => { this.openWork(); })
                 .id('notice-open-work')
@@ -168,7 +176,7 @@ export struct NoticeDetailView {
               if (this.workLoginRequired) {
                 Button($r('app.string.login_action'))
                   .width('100%').height($r('app.float.ui_size_primary_button'))
-                  .backgroundColor($r('app.color.ui_accent')).fontColor(Color.White)
+                  .backgroundColor($r('app.color.ui_accent')).fontColor($r('app.color.ui_text_on_strong'))
                   .onClick(() => { this.onRequestLogin(); })
                   .id('notice-work-login')
               }
@@ -176,9 +184,18 @@ export struct NoticeDetailView {
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
-          .padding($r('app.float.ui_space_page'))
-        }.width('100%').layoutWeight(1)
+          .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page'),
+            top: $r('app.float.ui_space_page'), bottom: $r('app.float.ui_space_bottom_inset') })
       }
-    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
+        }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+          .id('notice-detail-scroll')
+      }.width('100%').layoutWeight(1).onRefreshing(() => {
+        hilog.info(0x0a01, 'PullRefresh', 'notice-detail');
+        this.refresh(true);
+      })
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.ui_canvas'))
+      .id('notice-detail-root')
   }
 }

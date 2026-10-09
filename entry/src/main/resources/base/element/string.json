@@ -51,10 +51,6 @@
       "value": "课程资源请求失败，请稍后重试"
     },
     {
-      "name": "resource_probe",
-      "value": "资源与作业自检"
-    },
-    {
       "name": "course_all_semesters",
       "value": "全部学期"
     },
@@ -97,10 +93,6 @@
     {
       "name": "login_instruction",
       "value": "请在下方学校统一认证（SEP）页面登录：用户名是国科大邮箱，密码是学校密码。我们只读取登录凭证，不接触密码。"
-    },
-    {
-      "name": "login_back",
-      "value": "返回主页"
     },
     {
       "name": "login_confirm",
@@ -167,16 +159,8 @@
       "value": "通知接口被服务端拒绝"
     },
     {
-      "name": "retry_load",
-      "value": "重新加载"
-    },
-    {
-      "name": "course_teacher",
-      "value": "教师："
-    },
-    {
-      "name": "course_unfinished_work",
-      "value": "未完成作业"
+      "name": "notices_more_failed",
+      "value": "加载更多失败，点击重试"
     },
     {
       "name": "notice_read",
@@ -212,7 +196,6 @@
     { "name": "settings_title", "value": "设置" },
     { "name": "settings_notifications", "value": "通知" },
     { "name": "settings_work_reminder", "value": "作业截止提醒" },
-    { "name": "settings_diagnostics", "value": "诊断" },
     { "name": "settings_save_error", "value": "保存失败，请重试" },
     {
       "name": "mine_about_title",
@@ -221,58 +204,6 @@
     {
       "name": "login_action",
       "value": "登录"
-    },
-    {
-      "name": "courses_placeholder",
-      "value": "课程列表将在 M2 实现"
-    },
-    {
-      "name": "notices_placeholder",
-      "value": "通知列表将在 M4 实现"
-    },
-    {
-      "name": "login_status_active",
-      "value": "登录状态：已登录"
-    },
-    {
-      "name": "local_credentials_present",
-      "value": "本地状态：已保存会话凭证"
-    },
-    {
-      "name": "server_check_label",
-      "value": "服务器校验"
-    },
-    {
-      "name": "server_check_unchecked",
-      "value": "未校验"
-    },
-    {
-      "name": "server_check_passed",
-      "value": "已验证"
-    },
-    {
-      "name": "server_check_failed",
-      "value": "未通过"
-    },
-    {
-      "name": "login_origin_label",
-      "value": "登录落地地址"
-    },
-    {
-      "name": "saved_at_label",
-      "value": "凭证保存时间"
-    },
-    {
-      "name": "saved_domains_label",
-      "value": "已存凭证域名"
-    },
-    {
-      "name": "connection_probe",
-      "value": "刷新登录状态"
-    },
-    {
-      "name": "probe_running",
-      "value": "正在逐个检查候选接口…"
     },
     {
       "name": "logout",
@@ -289,10 +220,6 @@
     {
       "name": "work_empty",
       "value": "暂无课程作业"
-    },
-    {
-      "name": "work_list_scope",
-      "value": "课程作业 · 点击查看题目"
     },
     {
       "name": "work_loading",

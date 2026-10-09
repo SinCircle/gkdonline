@@ -9,6 +9,7 @@ import { WorkDetail, WorkQuestion, QuestionKind, QuestionOption, QuestionAttachm
 import { CourseResource } from '../data/ResourceModels';
 import { fetchWorkDetail, fetchWorkDetailPage, WorkDetailPage } from '../api/WorkDetailApi';
 import { ApiError, ApiErrorKind } from '../api/errors';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { SessionManager } from '../auth/SessionManager';
 import { WorkAudioCapture, takeWorkPhoto, startWorkRecording, finishWorkRecording } from './WorkCapture';
 import { ResourceTypeIcon } from './ResourceTypeIcon';
@@ -218,6 +219,7 @@ export struct WorkDetailView {
   @Param classId: string = '';
   @Event onRequestLogin: () => void = () => {};
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private detail: WorkDetail | undefined = undefined;
   @Local private failure: string = '';
   @Local private loginRequired: boolean = false;
@@ -326,9 +328,10 @@ export struct WorkDetailView {
       }
     } finally { if (this.active && version === this.version) this.revisionLoading = false; }
   }
-  private async refresh(): Promise<void> {
+  private async refresh(pull: boolean = false): Promise<void> {
     const version: number = ++this.version;
-    this.loading = true; this.failure = ''; this.loginRequired = false;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failure = ''; this.loginRequired = false; }
     try {
       const context = this.getUIContext().getHostContext();
       if (!context) throw new Error('无法取得页面缓存目录');
@@ -336,6 +339,7 @@ export struct WorkDetailView {
       if (this.active && version === this.version) {
         const detail: WorkDetail = page.detail;
         this.detail = detail; this.modifyUrl = page.modifyUrl; this.filesDir = context.filesDir;
+        this.failure = ''; this.loginRequired = false;
         this.locked = false; this.feedback = ''; this.submissionOutcome = '';
         this.revisionMode = false; this.revisionLoading = false;
         this.submitLogin = false; this.pendingUpload = undefined; this.uploadFailed = false;
@@ -349,7 +353,7 @@ export struct WorkDetailView {
         this.loginRequired = error instanceof ApiError && error.kind === ApiErrorKind.SESSION_EXPIRED;
         this.failure = this.loginRequired ? '请先登录后查看作业题目' : `加载题目失败：${(error as Error).message}`;
       }
-    } finally { if (this.active && version === this.version) this.loading = false; }
+    } finally { if (this.active && version === this.version) { this.loading = false; this.refreshing = false; } }
   }
   private updateAnswer(id: string, value: string): void {
     if (this.submitting || this.locked) return;
@@ -489,20 +493,22 @@ export struct WorkDetailView {
   }
   build() {
     Column() {
+      Refresh({ refreshing: $$this.refreshing }) {
+      List() {
       if (this.loading || this.failure || !this.detail || this.detail.questions.length === 0) {
-        Column({ space: $r('app.float.ui_space_section') }) {
+        ListItem() {
+          Column({ space: $r('app.float.ui_space_section') }) {
           if (this.loading) {
             LoadingProgress().width($r('app.float.ui_size_loading')).height($r('app.float.ui_size_loading')).color($r('app.color.ui_accent'))
           }
           Text(this.loading ? '正在加载题目…' : this.failure || '这份作业暂无题目')
             .fontSize($r('app.float.ui_text_body')).fontColor($r('app.color.ui_text_secondary'))
-          if (this.failure) {
-            Button(this.loginRequired ? '登录' : '重新加载')
-              .onClick(() => { if (this.loginRequired) this.onRequestLogin(); else this.refresh(); })
+          if (this.failure && this.loginRequired) {
+            Button('登录').onClick(() => { this.onRequestLogin(); })
           }
-        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).padding($r('app.float.ui_space_page'))
+          }.width('100%').height('100%').justifyContent(FlexAlign.Center).padding($r('app.float.ui_space_page'))
+        }.height('100%').id('work-detail-state-row')
       } else {
-        List() {
           ListItem() {
             Column({ space: $r('app.float.ui_space_content') }) {
               Text(this.detail.title).fontSize($r('app.float.ui_text_page_title')).fontWeight(FontWeight.Medium)
@@ -546,7 +552,13 @@ export struct WorkDetailView {
               .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
               .margin({ top: $r('app.float.ui_space_list'), bottom: index === this.detail!.questions.length - 1 ? $r('app.float.ui_space_page') : 0 })
           }, (q: WorkQuestion) => q.id)
-        }.width('100%').layoutWeight(1)
+      }
+      }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+      }.width('100%').layoutWeight(1).onRefreshing(() => {
+        hilog.info(0x0a01, 'PullRefresh', 'work-detail');
+        this.refresh(true);
+      })
+      if (!this.loading && !this.failure && this.detail && this.detail.questions.length > 0) {
         if (this.detail.form || this.submittedView()) {
           Column({ space: $r('app.float.ui_space_content') }) {
             if (this.detail.form?.blockedReason) {
@@ -559,7 +571,7 @@ export struct WorkDetailView {
               Button('重新登录').width('100%').onClick(() => { this.onRequestLogin(); })
             } else if (this.submittedView()) {
               Button(this.revisionLoading ? '正在打开修改页…' : '修改答案').width('100%').height($r('app.float.ui_size_primary_button'))
-                .backgroundColor($r('app.color.ui_accent')).fontColor(Color.White)
+                .backgroundColor($r('app.color.ui_accent')).fontColor($r('app.color.ui_text_on_strong'))
                 .enabled(this.canRevise())
                 .onClick(() => { this.revise(); }).id('work-revise-answer')
               if (!this.canRevise() && !this.revisionLoading) {
@@ -570,13 +582,19 @@ export struct WorkDetailView {
               }
             } else {
               Button(this.submitting ? '正在提交…' : '提交作业').width('100%').height($r('app.float.ui_size_primary_button'))
-                .backgroundColor($r('app.color.ui_accent')).fontColor(Color.White)
+                .backgroundColor($r('app.color.ui_accent')).fontColor($r('app.color.ui_text_on_strong'))
                 .enabled(!this.submitting && !this.confirming && !this.uploading && !this.picking && !this.audioCapture && !this.pendingUpload && !this.detail.form?.blockedReason)
                 .onClick(() => { this.confirmSubmit(); })
             }
-          }.width('100%').padding($r('app.float.ui_space_page')).backgroundColor($r('app.color.ui_surface'))
+          }.width('100%')
+            .padding($r('app.float.ui_space_page'))
+            .backgroundColor($r('app.color.ui_surface'))
+            // 按钮栏停在手势区上方，底下由铺满屏幕的根画布绘制。
+            .margin({ bottom: 28 })
         }
       }
-    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.ui_canvas'))
   }
 }

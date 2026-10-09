@@ -14,8 +14,8 @@ const TAG: string = 'NoticesView';
 export struct NoticesView {
   @Local private notices: Notice[] = [];
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private failed: boolean = false;
-  @Local private failureDetail: string = '';
   @Local private rejected: boolean = false;
   @Local private pageError: string = '';
   @Local private noticePins: Record<string, boolean> = {};
@@ -26,6 +26,7 @@ export struct NoticesView {
   private nextCursor: string = '';
   private hasMore: boolean = false;
   private loadingMore: boolean = false;
+  private requestVersion: number = 0;
 
   aboutToAppear(): void {
     this.active = true;
@@ -39,52 +40,61 @@ export struct NoticesView {
 
   aboutToDisappear(): void {
     this.active = false;
+    this.requestVersion++;
+    this.refreshing = false;
   }
 
-  private async refresh(): Promise<void> {
-    this.loading = true;
-    this.failed = false;
-    this.failureDetail = '';
+  private async refresh(pull: boolean = false): Promise<void> {
+    const version: number = ++this.requestVersion;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failed = false; }
     this.rejected = false;
     this.pageError = '';
     this.nextCursor = '';
     this.hasMore = false;
     try {
       const page: NoticePage = await loadNotices();
-      if (this.active) {
+      if (this.active && version === this.requestVersion) {
         this.notices = page.list;
         this.nextCursor = page.lastGetId;
         this.hasMore = !page.lastPage && !!page.lastGetId;
+        this.failed = false;
       }
     } catch (error) {
       const err: Error = error as Error;
-      hilog.error(DOMAIN, TAG, '读取通知内容失败: %{public}s', err.message);
-      if (this.active) {
+      let detail: string = err.message;
+      if (error instanceof ApiError) {
+        detail = `HTTP ${error.status} · ${error.detail || error.message} · ${error.responseBody.substring(0, 200)}`;
+      } else if (error instanceof NoticeAccessError) {
+        detail = `HTTP ${error.status} · ${error.response}`;
+      }
+      // 界面只给友好文案；HTTP 状态码、响应体这类细节只进日志，不摆到界面上。
+      hilog.error(DOMAIN, TAG, '读取通知内容失败: %{public}s；详情 %{public}s', err.message, detail);
+      if (this.active && version === this.requestVersion) {
         this.failed = true;
         this.rejected = error instanceof NoticeAccessError && /不被允许访问|请求出错/.test(err.message);
-        if (error instanceof ApiError) {
-          this.failureDetail = `HTTP ${error.status} · ${error.detail || error.message} · ${error.responseBody.substring(0, 200)}`;
-        } else if (error instanceof NoticeAccessError) {
-          this.failureDetail = `HTTP ${error.status} · ${error.response}`;
-        } else this.failureDetail = err.message;
       }
     } finally {
-      if (this.active) this.loading = false;
+      if (this.active && version === this.requestVersion) {
+        this.loading = false;
+        this.refreshing = false;
+      }
     }
   }
 
   private async loadMore(): Promise<void> {
     if (!this.active || !this.hasMore || !this.nextCursor || this.loadingMore || this.pageError) return;
+    const version: number = this.requestVersion;
     this.loadingMore = true;
     try {
       const page: NoticePage = await loadNotices(this.nextCursor);
-      if (!this.active) return;
+      if (!this.active || version !== this.requestVersion) return;
       const seen: Set<string> = new Set(this.notices.map((notice: Notice) => notice.uuid));
       this.notices = this.notices.concat(page.list.filter((notice: Notice) => !seen.has(notice.uuid)));
       this.nextCursor = page.lastGetId;
       this.hasMore = !page.lastPage && !!page.lastGetId;
     } catch (error) {
-      if (this.active) this.pageError = (error as Error).message;
+      if (this.active && version === this.requestVersion) this.pageError = (error as Error).message;
     } finally { this.loadingMore = false; }
   }
 
@@ -158,40 +168,27 @@ export struct NoticesView {
           .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
           .margin({ bottom: $r('app.float.ui_space_list') })
       }
-      if (this.loading) {
-        Column() {
-          PageLoading({ message: $r('app.string.notices_loading') })
-        }
-        .width('100%').layoutWeight(1)
-        .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-        .justifyContent(FlexAlign.Center)
-      } else if (this.failed) {
-        Column({ space: $r('app.float.ui_space_section') }) {
-          Text(this.rejected ? $r('app.string.notices_access_denied') : $r('app.string.notices_load_error'))
-            .fontSize($r('app.float.ui_text_card_title'))
-            .fontColor($r('app.color.ui_text_primary'))
-          if (this.failureDetail) {
-            Text(this.failureDetail)
-              .fontSize($r('app.float.ui_text_body'))
-              .fontColor($r('app.color.ui_text_secondary'))
-              .width('100%')
-          }
-          Button($r('app.string.retry_load'))
-            .fontSize($r('app.float.ui_text_button'))
-            .backgroundColor($r('app.color.ui_surface'))
-            .fontColor($r('app.color.ui_accent'))
-            .onClick(() => { this.refresh(); })
-        }.width('100%').layoutWeight(1).alignItems(HorizontalAlign.Start)
-          .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page'),
-            top: $r('app.float.ui_space_page_top') })
-      } else if (this.notices.length === 0) {
-        Text($r('app.string.notices_empty'))
-          .fontSize($r('app.float.ui_text_body'))
-          .fontColor($r('app.color.ui_text_secondary'))
-          .width('100%').layoutWeight(1).textAlign(TextAlign.Center)
-          .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-      } else {
+      Refresh({ refreshing: $$this.refreshing }) {
         List() {
+          if (this.loading || this.failed || this.notices.length === 0) {
+            ListItem() {
+              Column({ space: $r('app.float.ui_space_section') }) {
+                if (this.loading) {
+                  PageLoading({ message: $r('app.string.notices_loading') })
+                } else if (this.failed) {
+                  Text(this.rejected ? $r('app.string.notices_access_denied') : $r('app.string.notices_load_error'))
+                    .fontSize($r('app.float.ui_text_card_title'))
+                    .fontColor($r('app.color.ui_text_primary'))
+                } else {
+                  Text($r('app.string.notices_empty'))
+                    .fontSize($r('app.float.ui_text_body'))
+                    .fontColor($r('app.color.ui_text_secondary'))
+                }
+              }.width('100%').height('100%').justifyContent(FlexAlign.Center)
+                .alignItems(HorizontalAlign.Center)
+                .padding($r('app.float.ui_space_page'))
+            }.height('100%').id('notices-state-row')
+          } else {
           if (this.localError) {
             ListItem() {
               Text(this.localError)
@@ -260,13 +257,23 @@ export struct NoticesView {
           }, (notice: Notice) => notice.uuid)
           if (this.pageError) {
             ListItem() {
-              Button($r('app.string.retry_load'))
+              Text($r('app.string.notices_more_failed'))
+                .fontSize($r('app.float.ui_text_body'))
+                .fontColor($r('app.color.ui_accent'))
+                .width('100%').textAlign(TextAlign.Center)
                 .onClick(() => { this.pageError = ''; this.loadMore(); })
-            }.padding($r('app.float.ui_space_page'))
+            }.width('100%').padding($r('app.float.ui_space_page'))
           }
-        }.width('100%').layoutWeight(1)
+          ListItem() {
+            Column() {}.height($r('app.float.ui_space_floating_bar'))
+          }.id('notices-floating-bar-spacer')
+          }
+        }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
           .onReachEnd(() => { this.loadMore(); })
-      }
+      }.width('100%').layoutWeight(1).onRefreshing(() => {
+        hilog.info(0x0a01, 'PullRefresh', 'notices');
+        this.refresh(true);
+      })
     }
     .width('100%').height('100%')
     .backgroundColor($r('app.color.ui_canvas'))

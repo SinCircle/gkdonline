@@ -9,6 +9,8 @@
     { "name": "ui_radius_button", "value": "14vp" },
     { "name": "ui_radius_type_icon", "value": "12vp" },
     { "name": "ui_space_page", "value": "16vp" },
+    { "name": "ui_space_bottom_inset", "value": "44vp" },
+    { "name": "ui_space_floating_bar", "value": "120vp" },
     { "name": "ui_space_page_top", "value": "16vp" },
     { "name": "ui_space_card", "value": "16vp" },
     { "name": "ui_space_list", "value": "10vp" },
@@ -18,7 +20,6 @@
     { "name": "ui_size_loading", "value": "32vp" },
     { "name": "ui_size_filter_control", "value": "40vp" },
     { "name": "ui_size_primary_button", "value": "48vp" },
-    { "name": "ui_size_guest_icon", "value": "44vp" },
     { "name": "ui_size_answer_input", "value": "180vp" },
     { "name": "ui_size_badge", "value": "18vp" }
   ]

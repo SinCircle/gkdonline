@@ -11,6 +11,7 @@ import { ResourceTypeIcon } from './ResourceTypeIcon';
 import { shareResource } from './ResourceShare';
 import { CourseWork } from '../data/WorkModels';
 import { formatSizeLabel } from '../common/FormatSize';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 @ObservedV2
 class ResourceRow {
@@ -58,7 +59,6 @@ export struct ResourceStateView {
   @Param failure: ApiErrorKind | undefined = undefined;
   @Param emptyMessage: Resource = $r('app.string.resources_empty');
   @Param work: boolean = false;
-  @Event onRetry: () => void = () => {};
   @Event onRequestLogin: () => void = () => {};
 
   private message(): Resource {
@@ -87,14 +87,12 @@ export struct ResourceStateView {
           .fontSize($r('app.float.ui_text_body'))
           .fontColor($r('app.color.ui_text_secondary'))
           .textAlign(TextAlign.Center)
-        if (this.failure !== undefined) {
-          Button(this.failure === ApiErrorKind.SESSION_EXPIRED ? $r('app.string.login_action') : $r('app.string.retry_load'))
+        if (this.failure === ApiErrorKind.SESSION_EXPIRED) {
+          Button($r('app.string.login_action'))
             .fontSize($r('app.float.ui_text_button'))
             .backgroundColor($r('app.color.ui_accent'))
-            .onClick(() => {
-              if (this.failure === ApiErrorKind.SESSION_EXPIRED) this.onRequestLogin();
-              else this.onRetry();
-            })
+            .fontColor($r('app.color.ui_text_on_strong'))
+            .onClick(() => { this.onRequestLogin(); })
         }
       }
     }.width('100%').height('100%').justifyContent(FlexAlign.Center)
@@ -109,6 +107,7 @@ export struct ResourceListView {
   @Event onRequestLogin: () => void = () => {};
   @Event onOpenWork: (work: CourseWork) => void = () => {};
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private failure: ApiErrorKind | undefined = undefined;
   @Local private items: CourseResource[] = [];
   @Local private downloading: boolean = false;
@@ -148,23 +147,24 @@ export struct ResourceListView {
     this.refresh();
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(pull: boolean = false): Promise<void> {
     const version: number = ++this.version;
-    this.loading = true;
-    this.failure = undefined;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failure = undefined; }
     try {
       const page: ResourcePage = this.route.chapterId.length > 0 ?
         await fetchChapterResources(this.route) : await fetchCourseResources(this.route);
       if (!this.active || version !== this.version) return;
       this.items = page.items;
       this.enc = page.enc;
+      this.failure = undefined;
       this.refreshDownloaded();
     } catch (error) {
       if (this.active && version === this.version) {
         this.failure = error instanceof ApiError ? error.kind : ApiErrorKind.PARSE;
       }
     } finally {
-      if (this.active && version === this.version) this.loading = false;
+      if (this.active && version === this.version) { this.loading = false; this.refreshing = false; }
     }
   }
 
@@ -240,12 +240,15 @@ export struct ResourceListView {
 
   build() {
     Column() {
-      if (this.loading || this.failure !== undefined || this.items.length === 0) {
-        ResourceStateView({ loading: this.loading, failure: this.failure,
-          emptyMessage: $r('app.string.resources_empty'), onRetry: () => { this.refresh(); },
-          onRequestLogin: () => { this.onRequestLogin(); } })
-      } else {
+      Refresh({ refreshing: $$this.refreshing }) {
         List() {
+          if (this.loading || this.failure !== undefined || this.items.length === 0) {
+            ListItem() {
+              ResourceStateView({ loading: this.loading, failure: this.failure,
+                emptyMessage: $r('app.string.resources_empty'),
+                onRequestLogin: () => { this.onRequestLogin(); } })
+            }.height('100%').id('resource-state-row')
+          } else {
           ForEach(this.rows, (row: ResourceRow, index: number) => {
             ListItem() {
               Row({ space: $r('app.float.ui_space_content') }) {
@@ -276,11 +279,17 @@ export struct ResourceListView {
                 .enabled(!row.busy)
             }.padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
               .margin({ top: index === 0 ? $r('app.float.ui_space_page_top') : 0,
-                bottom: index === this.items.length - 1 ? $r('app.float.ui_space_page') : $r('app.float.ui_space_list') })
+                bottom: index === this.items.length - 1 ? $r('app.float.ui_space_bottom_inset') : $r('app.float.ui_space_list') })
           }, (row: ResourceRow) => row.item.id)
-        }.width('100%').layoutWeight(1)
-      }
-    }.width('100%').height('100%').backgroundColor($r('app.color.ui_canvas'))
+          }
+        }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+      }.width('100%').layoutWeight(1).onRefreshing(() => {
+        hilog.info(0x0a01, 'PullRefresh', 'resources');
+        this.refresh(true);
+      })
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.ui_canvas'))
       .onVisibleAreaChange([0, 1], (visible: boolean) => { this.visible = visible; })
   }
 }

@@ -122,8 +122,15 @@ export class SchoolNoticeSource implements NoticeSource {
       response.status, response.body.length, flatBody(response.body));
     const body: Record<string, Object> = parseResponse(response);
     const notices: Record<string, Object> = body['notices'] as Record<string, Object>;
-    const rawList: Array<Record<string, Object>> = notices?.['list'] as Array<Record<string, Object>>;
-    if (!notices || !Array.isArray(rawList)) {
+    // 通知历史翻到底时服务端只回 {"status":true}（实测 15 字符，没有 notices 字段）。
+    // 那是「没有更多了」，不是解析错误：当成空页收尾，别再抛错、更别把内部报错摆到界面上。
+    if (!notices) {
+      hilog.info(DOMAIN, TAG, '通知列表已到末页（响应无 notices 字段，%{public}d 字符）', response.body.length);
+      return { list: [], lastGetId: '', lastPage: true, status: response.status,
+        responseFirst200: response.body.substring(0, 200) };
+    }
+    const rawList: Array<Record<string, Object>> = notices['list'] as Array<Record<string, Object>>;
+    if (!Array.isArray(rawList)) {
       throw new NoticeAccessError(response.status, response.body.substring(0, 200), '通知列表缺少 notices.list');
     }
     const list: Notice[] = rawList.map((item: Record<string, Object>) => noticeFrom(item));

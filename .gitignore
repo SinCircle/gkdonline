@@ -19,3 +19,18 @@
 # Python 字节码缓存（曾误入版本库，已取消跟踪）
 __pycache__/
 *.pyc
+
+# 内部开发文档：只在本机保留，不进版本库
+/FINDINGS.md
+/HANDOFF.md
+/M1-CODEX-REPORT.md
+/RELEASE.md
+/AGENTS.md
+
+# 签名材料与本机 SDK 配置，绝不入库
+*.p12
+*.cer
+*.p7b
+*.csr
+*.dpapi
+/.ohos

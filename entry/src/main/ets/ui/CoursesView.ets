@@ -41,6 +41,7 @@ export struct CoursesView {
   @Local private semesterOptions: string[] = [];
   @Local private selectedIndex: number = 0;
   @Local private loading: boolean = true;
+  @Local private refreshing: boolean = false;
   @Local private failure: ApiErrorKind | undefined = undefined;
   @Local private unfinishedCounts: Record<string, number> = {};
   @Local private keyword: string = '';
@@ -93,6 +94,7 @@ export struct CoursesView {
   aboutToDisappear(): void {
     this.active = false;
     this.requestVersion++;
+    this.refreshing = false;
     SessionManager.get().unsubscribe(this.listener);
     WorkNavigation.get().unsubscribeChanged(this.workListener);
   }
@@ -220,10 +222,10 @@ export struct CoursesView {
     }
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(pull: boolean = false): Promise<void> {
     const version: number = ++this.requestVersion;
-    this.loading = true;
-    this.failure = undefined;
+    if (pull) this.refreshing = true;
+    else { this.loading = true; this.failure = undefined; }
     this.unfinishedCounts = {};
     this.countQueue = [];
     this.countStarted = new Set<string>();
@@ -236,6 +238,7 @@ export struct CoursesView {
       this.visibleCourses = [];
       this.failure = ApiErrorKind.SESSION_EXPIRED;
       this.loading = false;
+      this.refreshing = false;
       return;
     }
     try {
@@ -259,6 +262,7 @@ export struct CoursesView {
       this.filterIds = ids;
       const selected: number = ids.indexOf(previous ?? catalog.currentSemesterId);
       this.selectSemester(selected < 0 ? 0 : selected);
+      this.failure = undefined;
       hilog.info(DOMAIN, TAG, '课程加载成功：总数 %{public}d，当前筛选 %{public}s，显示 %{public}d',
         this.courses.length, this.filterIds[this.selectedIndex], this.visibleCourses.length);
     } catch (error) {
@@ -268,7 +272,10 @@ export struct CoursesView {
         this.failure = err instanceof ApiError ? err.kind : ApiErrorKind.PARSE;
       }
     } finally {
-      if (this.active && version === this.requestVersion) this.loading = false;
+      if (this.active && version === this.requestVersion) {
+        this.loading = false;
+        this.refreshing = false;
+      }
     }
   }
 
@@ -341,36 +348,13 @@ export struct CoursesView {
           .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
           .margin({ bottom: $r('app.float.ui_space_list') })
       }
-      if (this.loading) {
-        Column() {
-          PageLoading({ message: $r('app.string.courses_loading') })
-        }
-        .width('100%').layoutWeight(1)
-        .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-        .justifyContent(FlexAlign.Center)
-      } else if (this.failure !== undefined) {
-        Column({ space: $r('app.float.ui_space_section') }) {
-          Text(this.failureText())
-            .fontSize($r('app.float.ui_text_body'))
-            .fontColor($r('app.color.ui_text_primary'))
-          Button(this.failure === ApiErrorKind.SESSION_EXPIRED ? $r('app.string.login_action') :
-            $r('app.string.retry_load'))
-            .fontSize($r('app.float.ui_text_button'))
-            .backgroundColor($r('app.color.ui_accent'))
-            .onClick(() => {
-              if (this.failure === ApiErrorKind.SESSION_EXPIRED) this.onRequestLogin();
-              else this.refresh();
-            })
-        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
-          .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-      } else {
-        Column({ space: $r('app.float.ui_space_list') }) {
-          if (this.localError) {
+      if (!this.loading && this.failure === undefined) {
+        if (this.localError) {
             Text(this.localError)
               .fontSize($r('app.float.ui_text_label'))
               .fontColor($r('app.color.ui_error'))
               .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          }
+        }
           Column({ space: $r('app.float.ui_space_content') }) {
             if (USING_SAMPLE_DATA) {
               Text($r('app.string.sample_data_notice'))
@@ -408,17 +392,35 @@ export struct CoursesView {
           }.width('100%').alignItems(HorizontalAlign.Start)
             .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page'),
               top: $r('app.float.ui_space_page_top') })
-          List() {
-          if (this.visibleCourses.length === 0) {
+      }
+      Refresh({ refreshing: $$this.refreshing }) {
+        List() {
+          if (this.loading || this.failure !== undefined || this.visibleCourses.length === 0) {
             ListItem() {
-              Text($r('app.string.courses_empty'))
-                .fontSize($r('app.float.ui_text_body'))
-                .fontColor($r('app.color.ui_text_secondary'))
-                .width('100%').textAlign(TextAlign.Center)
-                .padding($r('app.float.ui_space_section'))
-            }.margin({ bottom: $r('app.float.ui_space_page') })
-              .padding({ left: $r('app.float.ui_space_page'), right: $r('app.float.ui_space_page') })
-          }
+              Column({ space: $r('app.float.ui_space_section') }) {
+                if (this.loading) {
+                  PageLoading({ message: $r('app.string.courses_loading') })
+                } else if (this.failure !== undefined) {
+                  Text(this.failureText())
+                    .fontSize($r('app.float.ui_text_body'))
+                    .fontColor($r('app.color.ui_text_primary'))
+                  if (this.failure === ApiErrorKind.SESSION_EXPIRED) {
+                    Button($r('app.string.login_action'))
+                      .fontSize($r('app.float.ui_text_button'))
+                      .backgroundColor($r('app.color.ui_accent'))
+                      .fontColor($r('app.color.ui_text_on_strong'))
+                      .onClick(() => { this.onRequestLogin(); })
+                  }
+                } else {
+                  Text($r('app.string.courses_empty'))
+                    .fontSize($r('app.float.ui_text_body'))
+                    .fontColor($r('app.color.ui_text_secondary'))
+                }
+              }.width('100%').height('100%').justifyContent(FlexAlign.Center)
+                .alignItems(HorizontalAlign.Center)
+                .padding($r('app.float.ui_space_page'))
+            }.height('100%').id('courses-state-row')
+          } else {
           ForEach(this.visibleCourses, (course: Course, index: number) => {
             ListItem() {
               Row() {
@@ -467,7 +469,7 @@ export struct CoursesView {
                   Text(this.unfinishedCounts[course.id].toString())
                     .fontSize($r('app.float.ui_text_label'))
                     .fontWeight(FontWeight.Medium)
-                    .fontColor($r('app.color.ui_surface'))
+                    .fontColor($r('app.color.ui_text_on_strong'))
                     .backgroundColor($r('app.color.ui_badge_number'))
                     .width($r('app.float.ui_size_badge'))
                     .height($r('app.float.ui_size_badge'))
@@ -490,9 +492,17 @@ export struct CoursesView {
               .swipeAction({ end: { builder: () => { this.courseSwipeMenu(course); } },
                 edgeEffect: SwipeEdgeEffect.Spring })
           }, (course: Course) => `${course.id}:${this.noteVersions[course.id] ?? 0}`)
-          }.width('100%').layoutWeight(1)
-        }.width('100%').layoutWeight(1)
-      }
+          ListItem() {
+            Column() {}.height($r('app.float.ui_space_floating_bar'))
+          }.id('courses-floating-bar-spacer')
+          }
+        }.width('100%').height('100%').edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+      }.width('100%').layoutWeight(1)
+        .margin({ top: !this.loading && this.failure === undefined ? $r('app.float.ui_space_list') : 0 })
+        .onRefreshing(() => {
+        hilog.info(0x0a01, 'PullRefresh', 'courses');
+        this.refresh(true);
+      })
     }
     .width('100%').height('100%')
     .backgroundColor($r('app.color.ui_canvas'))
