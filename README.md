@@ -12,6 +12,16 @@
 - **文件上传下载**：上传下载都在应用内直接完成，不用来回切界面。
 - **排版**：原生鸿蒙组件，配重新设计统一的排版。
 
+## 截图
+
+| 课程 | 课程资料 | 作业 |
+|---|---|---|
+| <img src="docs/screenshots/courses.jpg" width="240"> | <img src="docs/screenshots/resources.jpg" width="240"> | <img src="docs/screenshots/works.jpg" width="240"> |
+
+| 通知 | 作业截止提醒 | 设置 |
+|---|---|---|
+| <img src="docs/screenshots/notices.jpg" width="240"> | <img src="docs/screenshots/notices-reminder.jpg" width="240"> | <img src="docs/screenshots/settings.jpg" width="240"> |
+
 ## 功能
 
 | 模块 | 内容 |
